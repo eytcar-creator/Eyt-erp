@@ -1,0 +1,61 @@
+name: E.Y.T ERP CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: eyt_erp_test
+          POSTGRES_USER: eyt
+          POSTGRES_PASSWORD: eyt_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eyt -d eyt_erp_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Compile check
+        run: python -m compileall app migrations
+
+      - name: Migration check
+        env:
+          DATABASE_URL: postgresql://eyt:eyt_test_password@localhost:5432/eyt_erp_test
+        run: alembic upgrade head
+
+      - name: Basic API import check
+        env:
+          DATABASE_URL: postgresql://eyt:eyt_test_password@localhost:5432/eyt_erp_test
+        run: python -c "from app.main import app; print(app.title)"
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Scan repository for obvious secrets
+        run: |
+          ! grep -RniE '(api[_-]?key|secret|password|token)[[:space:]]*[:=][[:space:]]*[A-Za-z0-9_./+=-]{12,}' --exclude-dir=.git .
