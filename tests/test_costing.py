@@ -16,9 +16,10 @@ def test_true_cost_includes_holding_and_prepayment():
         annual_rate=Decimal("0.30"),
         customer_prepayment=Decimal("20000000"),
     )
+    assert result["gross_cost"] == Decimal("148000000")
     assert result["capital_base"] == Decimal("128000000")
     assert result["holding_cost"] == Decimal("3156164.38")
-    assert result["true_cost"] == Decimal("16156164.38") + Decimal("128000000") + Decimal("20000000")
+    assert result["true_cost"] == Decimal("151156164.38")
 
 
 def test_unit_cost_requires_accepted_quantity():
