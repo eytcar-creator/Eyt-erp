@@ -29,6 +29,7 @@ jobs:
       BOOTSTRAP_SECRET: ci-only-bootstrap-secret
       ACCESS_TOKEN_MINUTES: 15
       REFRESH_TOKEN_DAYS: 30
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
