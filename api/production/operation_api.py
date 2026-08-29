@@ -1,16 +1,20 @@
 from decimal import Decimal
+import os
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from .auth import require_permission, current_principal
+from .auth import require_permission
 from .postgres_repository import PostgresProductionRepository
 
-router = APIRouter(
-    prefix="/api/production/orders",
-    tags=["production"],
-    dependencies=[Depends(require_permission("production.execute"))],
-)
+router = APIRouter(prefix="/api/production/orders", tags=["production"])
+
+
+class OperationStartInput(BaseModel):
+    sequenceNo: int
+    operationCode: str
+    operationName: str
+    contractorName: str | None = None
 
 
 class OperationCompletionInput(BaseModel):
@@ -27,13 +31,65 @@ class OperationCompletionInput(BaseModel):
 
 
 def validate_quantities(payload: OperationCompletionInput) -> None:
-    if min(payload.inputQty, payload.acceptedQty, payload.rejectedQty, payload.wasteQty) < 0:
+    values = (payload.inputQty, payload.acceptedQty, payload.rejectedQty, payload.wasteQty)
+    if min(values) < 0:
         raise HTTPException(status_code=422, detail="Production quantities cannot be negative")
     if payload.acceptedQty + payload.rejectedQty + payload.wasteQty != payload.inputQty:
         raise HTTPException(status_code=409, detail="accepted + rejected + waste must equal input")
 
 
-def complete_operation(repo: PostgresProductionRepository, order_no: str, payload: OperationCompletionInput):
+def _repo() -> PostgresProductionRepository:
+    import psycopg
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        raise HTTPException(status_code=500, detail="DATABASE_URL is not configured")
+    return PostgresProductionRepository(psycopg.connect(database_url))
+
+
+@router.post("/{order_no}/operations/{operation_code}/start", status_code=200)
+def start_operation(
+    order_no: str,
+    operation_code: str,
+    payload: OperationStartInput,
+    _=Depends(require_permission("production.execute")),
+):
+    if payload.operationCode != operation_code:
+        raise HTTPException(status_code=409, detail="operationCode does not match URL")
+    repo = _repo()
+    try:
+        repo.start_operation(order_no, payload.sequenceNo, operation_code,
+                             payload.operationName, payload.contractorName)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    finally:
+        repo.connection.close()
+    return {"orderNo": order_no, "operationCode": operation_code, "status": "in_progress"}
+
+
+@router.post("/{order_no}/operations/{operation_code}/complete", status_code=200)
+def complete_operation_http(
+    order_no: str,
+    operation_code: str,
+    payload: OperationCompletionInput,
+    _=Depends(require_permission("production.execute")),
+):
+    if payload.operationCode != operation_code:
+        raise HTTPException(status_code=409, detail="operationCode does not match URL")
     validate_quantities(payload)
-    repo.record_operation(order_no, payload.sequenceNo, payload.operationCode, payload.operationName, payload.inputQty, payload.acceptedQty, payload.rejectedQty, payload.wasteQty, payload.serviceCost, payload.transportCost, payload.contractorName)
-    return {"orderNo": order_no, "operationCode": payload.operationCode, "status": "completed"}
+    repo = _repo()
+    try:
+        repo.record_operation(
+            order_no, payload.sequenceNo, operation_code, payload.operationName,
+            payload.inputQty, payload.acceptedQty, payload.rejectedQty,
+            payload.wasteQty, payload.serviceCost, payload.transportCost,
+            payload.contractorName,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    finally:
+        repo.connection.close()
+    return {"orderNo": order_no, "operationCode": operation_code, "status": "completed"}
