@@ -1,4 +1,4 @@
-"""E.Y.T Inventory Transactions v1."""
+"""E.Y.T Inventory Transaction Ledger v1."""
 
 from dataclasses import dataclass
 from decimal import Decimal
@@ -13,9 +13,13 @@ class InventoryTransaction:
 
 def apply_transaction(stock: StockItem, transaction: InventoryTransaction):
     qty = Decimal(str(transaction.quantity))
-    if transaction.transaction_type in ("production_receipt", "purchase_receipt", "transfer_in", "return_in"):
+    if qty <= 0:
+        raise ValueError("Quantity must be positive")
+    inbound = {"production_receipt", "purchase_receipt", "transfer_in", "return_in"}
+    outbound = {"sales_issue", "transfer_out", "scrap"}
+    if transaction.transaction_type in inbound:
         stock.on_hand += qty
-    elif transaction.transaction_type in ("sales_issue", "transfer_out", "scrap"):
+    elif transaction.transaction_type in outbound:
         if qty > stock.available:
             raise ValueError("Insufficient available stock")
         stock.on_hand -= qty
