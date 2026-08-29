@@ -21,6 +21,7 @@ PERMISSIONS = {"production.read", "production.execute", "qc.inspect", "qc.releas
 
 class LoginInput(BaseModel):
     username: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=8, max_length=200)
 class RefreshInput(BaseModel):
     refresh_token: str = Field(min_length=40, max_length=300)
 class BootstrapInput(BaseModel):
