@@ -12,7 +12,7 @@ from .postgres_repository import PostgresProductionRepository
 from .auth import require_permission
 
 if FastAPI is not None:
-    app = FastAPI(title="E.Y.T Production API", version="0.2.0")
+    app = FastAPI(title="E.Y.T Production API", version="0.3.0")
 
     class OrderInput(BaseModel):
         orderNo: str
@@ -43,5 +43,9 @@ if FastAPI is not None:
         with psycopg.connect(database_url) as conn:
             PostgresProductionRepository(conn).create_order(payload.orderNo, payload.productCode, payload.productName, payload.targetQty, payload.orderDate, payload.customerId)
         return {"orderNo": payload.orderNo, "status": "planned"}
+
+    # Sprint 4 routers are imported here so the Docker entrypoint remains stable.
+    from .inventory_api import router as inventory_router
+    app.include_router(inventory_router)
 else:
     app = None
