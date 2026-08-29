@@ -33,15 +33,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-
       - name: Install dependencies
-        run: pip install -r requirements.txt
-
+        run: pip install -r requirements.txt httpx
+      - name: Initialize PostgreSQL test schema
+        run: |
+          PGPASSWORD=eyt_test psql -h localhost -U eyt_user -d eyt_erp_test -v ON_ERROR_STOP=1 -f database/migrations/001_production_core.sql
+          PGPASSWORD=eyt_test psql -h localhost -U eyt_user -d eyt_erp_test -v ON_ERROR_STOP=1 -f database/migrations/002_production_indexes.sql
+          PGPASSWORD=eyt_test psql -h localhost -U eyt_user -d eyt_erp_test -v ON_ERROR_STOP=1 -f database/migrations/003_identity_rbac.sql
       - name: Run tests
         run: pytest -q
