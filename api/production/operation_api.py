@@ -1,10 +1,10 @@
 from decimal import Decimal
 import os
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from .auth import require_permission
+from .auth import audit, require_permission
 from .postgres_repository import PostgresProductionRepository
 
 router = APIRouter(prefix="/api/production/orders", tags=["production"])
@@ -51,7 +51,8 @@ def start_operation(
     order_no: str,
     operation_code: str,
     payload: OperationStartInput,
-    _=Depends(require_permission("production.execute")),
+    request: Request,
+    principal: dict = Depends(require_permission("production.execute")),
 ):
     if payload.operationCode != operation_code:
         raise HTTPException(status_code=409, detail="operationCode does not match URL")
@@ -65,6 +66,8 @@ def start_operation(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     finally:
         repo.connection.close()
+    audit(request, principal, "production.operation.start", order_no,
+          {"operation_code": operation_code, "sequence_no": payload.sequenceNo})
     return {"orderNo": order_no, "operationCode": operation_code, "status": "in_progress"}
 
 
@@ -73,7 +76,8 @@ def complete_operation_http(
     order_no: str,
     operation_code: str,
     payload: OperationCompletionInput,
-    _=Depends(require_permission("production.execute")),
+    request: Request,
+    principal: dict = Depends(require_permission("production.execute")),
 ):
     if payload.operationCode != operation_code:
         raise HTTPException(status_code=409, detail="operationCode does not match URL")
@@ -92,4 +96,8 @@ def complete_operation_http(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     finally:
         repo.connection.close()
+    audit(request, principal, "production.operation.complete", order_no,
+          {"operation_code": operation_code, "sequence_no": payload.sequenceNo,
+           "accepted_qty": str(payload.acceptedQty), "rejected_qty": str(payload.rejectedQty),
+           "waste_qty": str(payload.wasteQty)})
     return {"orderNo": order_no, "operationCode": operation_code, "status": "completed"}
