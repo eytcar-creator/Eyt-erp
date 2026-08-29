@@ -1,8 +1,4 @@
-"""PostgreSQL persistence adapter for E.Y.T production orders.
-
-Requires psycopg (v3). SQL is parameterized; transaction ownership stays with
-this adapter so API handlers can remain focused on business behavior.
-"""
+"""PostgreSQL persistence adapter for E.Y.T production orders."""
 from __future__ import annotations
 
 from decimal import Decimal
@@ -42,6 +38,39 @@ class PostgresProductionRepository:
             columns = [d.name for d in cur.description]
             return dict(zip(columns, row))
 
+    def start_operation(self, order_no: str, sequence_no: int,
+                        operation_code: str, operation_name: str,
+                        contractor_name: str | None = None) -> None:
+        with self.connection.cursor() as cur:
+            cur.execute("SELECT id FROM production_orders WHERE order_no=%s", (order_no,))
+            order = cur.fetchone()
+            if order is None:
+                raise KeyError(f"Production order not found: {order_no}")
+            cur.execute(
+                """SELECT id FROM production_operations
+                   WHERE production_order_id=%s AND operation_code=%s
+                     AND status='in_progress'""",
+                (order[0], operation_code),
+            )
+            if cur.fetchone() is not None:
+                raise ValueError(f"Operation already in progress: {operation_code}")
+            cur.execute(
+                """INSERT INTO production_operations
+                   (production_order_id, sequence_no, operation_code,
+                    operation_name, contractor_name, input_qty, accepted_qty,
+                    rejected_qty, waste_qty, service_cost, transport_cost,
+                    actual_start, status)
+                   VALUES (%s,%s,%s,%s,%s,0,0,0,0,0,0,
+                           CURRENT_TIMESTAMP,'in_progress')""",
+                (order[0], sequence_no, operation_code, operation_name,
+                 contractor_name),
+            )
+            cur.execute(
+                "UPDATE production_orders SET status='in_progress', actual_start=COALESCE(actual_start, CURRENT_TIMESTAMP) WHERE id=%s",
+                (order[0],),
+            )
+        self.connection.commit()
+
     def record_operation(self, order_no: str, sequence_no: int,
                          operation_code: str, operation_name: str,
                          input_qty: Decimal, accepted_qty: Decimal,
@@ -55,15 +84,24 @@ class PostgresProductionRepository:
             if order is None:
                 raise KeyError(f"Production order not found: {order_no}")
             cur.execute(
-                """INSERT INTO production_operations
-                   (production_order_id, sequence_no, operation_code,
-                    operation_name, contractor_name, input_qty, accepted_qty,
-                    rejected_qty, waste_qty, service_cost, transport_cost,
-                    actual_start, actual_end, status)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                           CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'completed')""",
-                (order[0], sequence_no, operation_code, operation_name,
-                 contractor_name, input_qty, accepted_qty, rejected_qty,
-                 waste_qty, service_cost, transport_cost),
+                """SELECT id FROM production_operations
+                   WHERE production_order_id=%s AND operation_code=%s
+                     AND status='in_progress'
+                   ORDER BY id DESC LIMIT 1""",
+                (order[0], operation_code),
+            )
+            operation = cur.fetchone()
+            if operation is None:
+                raise ValueError(f"Operation must be started before completion: {operation_code}")
+            cur.execute(
+                """UPDATE production_operations
+                   SET sequence_no=%s, operation_name=%s, contractor_name=%s,
+                       input_qty=%s, accepted_qty=%s, rejected_qty=%s,
+                       waste_qty=%s, service_cost=%s, transport_cost=%s,
+                       actual_end=CURRENT_TIMESTAMP, status='completed'
+                   WHERE id=%s""",
+                (sequence_no, operation_name, contractor_name, input_qty,
+                 accepted_qty, rejected_qty, waste_qty, service_cost,
+                 transport_cost, operation[0]),
             )
         self.connection.commit()
