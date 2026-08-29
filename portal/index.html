@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>E.Y.T ERP</title>
+<style>
+body{font-family:Tahoma,Arial,sans-serif;margin:0;background:#f4f6f8;color:#1d2733}header{background:#17212b;color:#fff;padding:18px 24px}.wrap{max-width:1200px;margin:auto;padding:24px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}.card{background:#fff;padding:18px;border-radius:12px;box-shadow:0 1px 6px #0001}.value{font-size:28px;font-weight:bold;margin-top:10px}.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:22px 0}.toolbar button{padding:10px 14px;border:0;border-radius:8px;background:#1f6feb;color:#fff;cursor:pointer}.panel{background:#fff;padding:18px;border-radius:12px}.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}input,select,textarea{width:100%;padding:10px;box-sizing:border-box;border:1px solid #ccd3da;border-radius:7px}button{padding:10px 14px;border:0;border-radius:7px;background:#198754;color:#fff;cursor:pointer}table{width:100%;border-collapse:collapse;margin-top:18px;font-size:13px}th,td{border-bottom:1px solid #eee;padding:8px;text-align:right}.muted{color:#6c757d}
+</style></head>
+<body>
+<header><strong>E.Y.T ERP</strong> <span class="muted" style="color:#cbd5e1">سامانه عملیاتی فروش، انبار، تولید و مالی</span></header>
+<div class="wrap">
+<div class="cards" id="cards"></div>
+<div class="toolbar">
+<button onclick="loadResource('customers')">مشتریان</button><button onclick="loadResource('suppliers')">تأمین‌کنندگان</button>
+<button onclick="loadResource('products')">محصولات</button><button onclick="loadResource('warehouses')">انبارها</button>
+<button onclick="loadResource('purchase-orders')">خرید</button><button onclick="loadResource('production-orders')">تولید</button>
+<button onclick="loadResource('shortage-alerts')">کسری مواد</button><button onclick="loadResource('receivables')">مطالبات</button>
+</div>
+<div class="panel"><h3 id="title">داشبورد</h3><div id="form"></div><div id="table"></div></div>
+</div>
+<script>
+const API=location.hostname==='localhost'||location.hostname==='127.0.0.1'?'http://localhost:8000/api/v1':'/api/v1';
+let resources={};
+async function init(){resources=(await (await fetch(API+'/resources')).json()).resources.reduce((a,x)=>(a[x.name]=x,a),{}); await dashboard();}
+async function dashboard(){let d=await (await fetch(API+'/dashboard/summary')).json();let labels={open_receivables:'مطالبات باز',open_payables:'بدهی باز',open_shortages:'کسری مواد',active_production:'تولید فعال',queued_automation:'اتوماسیون در صف'};document.getElementById('cards').innerHTML=Object.entries(d).map(([k,v])=>'<div class="card"><div>'+labels[k]+'</div><div class="value">'+v+'</div></div>').join('');}
+async function loadResource(name){document.getElementById('title').textContent=name;let spec=resources[name];let f=spec.fields.map(x=>'<div><label>'+x+'</label><input name="'+x+'"></div>').join('');document.getElementById('form').innerHTML='<h4>ثبت رکورد جدید</h4><div class="row">'+f+'</div><p><button onclick="saveRecord(\''+name+'\')">ذخیره</button></p>';let r=await (await fetch(API+'/'+name)).json();renderTable(r.items);}
+function renderTable(items){if(!items.length){document.getElementById('table').innerHTML='<p class="muted">رکوردی وجود ندارد.</p>';return}let keys=Object.keys(items[0]);document.getElementById('table').innerHTML='<table><thead><tr>'+keys.map(k=>'<th>'+k+'</th>').join('')+'</tr></thead><tbody>'+items.map(row=>'<tr>'+keys.map(k=>'<td>'+String(row[k]??'')+'</td>').join('')+'</tr>').join('')+'</tbody></table>';}
+async function saveRecord(name){let data={};document.querySelectorAll('#form input').forEach(i=>{if(i.value)data[i.name]=i.value});let res=await fetch(API+'/'+name,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data})});if(!res.ok){alert('خطا: '+await res.text());return}await loadResource(name);await dashboard();}
+init().catch(e=>document.body.innerHTML+='<pre>'+e+'</pre>');
+</script></body></html>
