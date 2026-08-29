@@ -15,7 +15,7 @@ jobs:
         env:
           POSTGRES_DB: eyt_erp_test
           POSTGRES_USER: eyt
-          POSTGRES_PASSWORD: eyt_test_password
+          POSTGRES_PASSWORD: ci-test
         ports:
           - 5432:5432
         options: >-
@@ -43,12 +43,12 @@ jobs:
 
       - name: Migration check
         env:
-          DATABASE_URL: postgresql://eyt:eyt_test_password@localhost:5432/eyt_erp_test
+          DATABASE_URL: postgresql+psycopg://eyt:ci-test@localhost:5432/eyt_erp_test
         run: alembic upgrade head
 
       - name: Basic API import check
         env:
-          DATABASE_URL: postgresql://eyt:eyt_test_password@localhost:5432/eyt_erp_test
+          DATABASE_URL: postgresql+psycopg://eyt:ci-test@localhost:5432/eyt_erp_test
         run: python -c "from app.main import app; print(app.title)"
 
   secret-scan:
