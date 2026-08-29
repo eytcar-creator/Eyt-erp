@@ -2,7 +2,7 @@
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
-revision="0017"; down_revision="0016"; branch_labels=None; depends_on=None
+revision="0017_identity"; down_revision="0016_product_master"; branch_labels=None; depends_on=None
 PERMISSIONS=["catalog.read","inventory.read","inventory.adjust","sales.quote.create","sales.order.create","sales.order.approve","sales.discount.override","delivery.create","invoice.read","finance.receipt.create","finance.payment.approve","production.read","production.execute","qc.inspect","qc.release","purchasing.create","purchasing.approve","reporting.read","admin.users.manage","admin.roles.manage"]
 def upgrade():
  op.create_table("users",sa.Column("id",UUID(as_uuid=True),primary_key=True,server_default=sa.text("gen_random_uuid()")),sa.Column("username",sa.String(120),nullable=False,unique=True),sa.Column("email",sa.String(250),unique=True),sa.Column("password_hash",sa.Text(),nullable=False),sa.Column("customer_id",UUID(as_uuid=True),sa.ForeignKey("customers.id",ondelete="SET NULL")),sa.Column("is_active",sa.Boolean(),nullable=False,server_default=sa.true()),sa.Column("created_at",sa.DateTime(timezone=True),nullable=False,server_default=sa.func.now()),sa.Column("last_login_at",sa.DateTime(timezone=True)))
