@@ -1,0 +1,93 @@
+"""E.Y.T ERP executable identity, RBAC, token and audit layer."""
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import UUID
+
+revision = "0017"
+down_revision = "0016"
+branch_labels = None
+depends_on = None
+
+PERMISSIONS = [
+    "catalog.read", "inventory.read", "inventory.adjust", "sales.quote.create",
+    "sales.order.create", "sales.order.approve", "sales.discount.override", "delivery.create",
+    "invoice.read", "finance.receipt.create", "finance.payment.approve", "production.read",
+    "production.execute", "qc.inspect", "qc.release", "purchasing.create", "purchasing.approve",
+    "reporting.read", "admin.users.manage", "admin.roles.manage",
+]
+
+
+def upgrade():
+    op.create_table(
+        "users",
+        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column("username", sa.String(120), nullable=False, unique=True),
+        sa.Column("email", sa.String(250), unique=True),
+        sa.Column("password_hash", sa.Text(), nullable=False),
+        sa.Column("customer_id", UUID(as_uuid=True), sa.ForeignKey("customers.id", ondelete="SET NULL")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column("last_login_at", sa.DateTime(timezone=True)),
+    )
+    op.create_table(
+        "permissions",
+        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column("code", sa.String(150), nullable=False, unique=True),
+        sa.Column("description", sa.Text()),
+    )
+    op.create_table(
+        "user_roles",
+        sa.Column("user_id", UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+        sa.Column("role_id", UUID(as_uuid=True), sa.ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+    )
+    op.create_table(
+        "role_permissions",
+        sa.Column("role_id", UUID(as_uuid=True), sa.ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+        sa.Column("permission_id", UUID(as_uuid=True), sa.ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
+    )
+    op.create_table(
+        "refresh_tokens",
+        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column("user_id", UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("token_hash", sa.String(128), nullable=False, unique=True),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("revoked_at", sa.DateTime(timezone=True)),
+        sa.Column("replaced_by_id", UUID(as_uuid=True)),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+    )
+    op.create_table(
+        "audit_logs",
+        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column("actor_user_id", UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="SET NULL")),
+        sa.Column("action", sa.String(120), nullable=False),
+        sa.Column("entity_type", sa.String(120)),
+        sa.Column("entity_id", UUID(as_uuid=True)),
+        sa.Column("correlation_id", sa.String(120)),
+        sa.Column("ip_address", sa.String(64)),
+        sa.Column("metadata", sa.JSON()),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+    )
+    op.create_index("idx_users_customer", "users", ["customer_id"])
+    op.create_index("idx_refresh_tokens_user", "refresh_tokens", ["user_id"])
+    op.create_index("idx_audit_actor_time", "audit_logs", ["actor_user_id", "created_at"])
+    op.execute(sa.text("INSERT INTO permissions (code) VALUES " + ",".join(f"('{p}')" for p in PERMISSIONS) + " ON CONFLICT (code) DO NOTHING"))
+    # Full-access internal role for initial controlled deployment.
+    op.execute(sa.text("INSERT INTO roles (name, description) VALUES ('CEO', 'Full internal ERP access') ON CONFLICT (name) DO NOTHING"))
+    op.execute(sa.text("""
+        INSERT INTO role_permissions (role_id, permission_id)
+        SELECT r.id, p.id FROM roles r CROSS JOIN permissions p
+        WHERE r.name = 'CEO'
+        ON CONFLICT DO NOTHING
+    """))
+
+
+def downgrade():
+    op.drop_index("idx_audit_actor_time", table_name="audit_logs")
+    op.drop_index("idx_refresh_tokens_user", table_name="refresh_tokens")
+    op.drop_index("idx_users_customer", table_name="users")
+    op.drop_table("audit_logs")
+    op.drop_table("refresh_tokens")
+    op.drop_table("role_permissions")
+    op.drop_table("user_roles")
+    op.drop_table("permissions")
+    op.drop_table("users")
