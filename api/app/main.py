@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
-app = FastAPI(title="E.Y.T ERP API", version="1.1.0")
+app = FastAPI(title="E.Y.T ERP API", version="1.2.0")
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 engine = create_async_engine(
@@ -21,6 +21,8 @@ async def health():
     return {"status": "ok", "database": "ok"}
 
 
-from .erp import router as erp_router
+from app.auth.api import router as auth_router
+from app.erp import router as erp_router
 
+app.include_router(auth_router)
 app.include_router(erp_router)
