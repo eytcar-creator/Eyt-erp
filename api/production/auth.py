@@ -6,6 +6,7 @@ from uuid import UUID
 
 import jwt
 import psycopg
+from psycopg.types.json import Json
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel, Field
@@ -27,7 +28,6 @@ class BootstrapInput(BaseModel):
     username: str = Field(min_length=3, max_length=120)
     password: str = Field(min_length=12, max_length=200)
     email: str | None = Field(default=None, max_length=250)
-
 
 def db_connection():
     url = os.getenv("DATABASE_URL")
@@ -85,7 +85,7 @@ def require_permission(code: str) -> Callable:
 
 def audit(request: Request, principal: dict, action: str, entity_id=None, metadata=None):
     with db_connection() as conn:
-        conn.execute("INSERT INTO eyt_audit_logs(actor_user_id,action,entity_id,correlation_id,ip_address,metadata) VALUES(%s,%s,%s,%s,%s,%s)", (principal["id"], action, entity_id, request.headers.get("X-Correlation-ID") or secrets.token_hex(16), request.client.host if request.client else None, metadata or {}))
+        conn.execute("INSERT INTO eyt_audit_logs(actor_user_id,action,entity_id,correlation_id,ip_address,metadata) VALUES(%s,%s,%s,%s,%s,%s)", (principal["id"], action, entity_id, request.headers.get("X-Correlation-ID") or secrets.token_hex(16), request.client.host if request.client else None, Json(metadata or {})))
         conn.commit()
 
 @router.post("/bootstrap", status_code=201)
