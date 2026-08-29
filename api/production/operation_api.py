@@ -46,6 +46,13 @@ def _repo() -> PostgresProductionRepository:
     return PostgresProductionRepository(psycopg.connect(database_url))
 
 
+def _order_id(repo: PostgresProductionRepository, order_no: str):
+    order = repo.get_order(order_no)
+    if order is None:
+        raise HTTPException(status_code=404, detail=f"Production order not found: {order_no}")
+    return order["id"]
+
+
 @router.post("/{order_no}/operations/{operation_code}/start", status_code=200)
 def start_operation(
     order_no: str,
@@ -58,6 +65,7 @@ def start_operation(
         raise HTTPException(status_code=409, detail="operationCode does not match URL")
     repo = _repo()
     try:
+        entity_id = _order_id(repo, order_no)
         repo.start_operation(order_no, payload.sequenceNo, operation_code,
                              payload.operationName, payload.contractorName)
     except KeyError as exc:
@@ -66,7 +74,7 @@ def start_operation(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     finally:
         repo.connection.close()
-    audit(request, principal, "production.operation.start", order_no,
+    audit(request, principal, "production.operation.start", entity_id,
           {"operation_code": operation_code, "sequence_no": payload.sequenceNo})
     return {"orderNo": order_no, "operationCode": operation_code, "status": "in_progress"}
 
@@ -84,6 +92,7 @@ def complete_operation_http(
     validate_quantities(payload)
     repo = _repo()
     try:
+        entity_id = _order_id(repo, order_no)
         repo.record_operation(
             order_no, payload.sequenceNo, operation_code, payload.operationName,
             payload.inputQty, payload.acceptedQty, payload.rejectedQty,
@@ -96,7 +105,7 @@ def complete_operation_http(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     finally:
         repo.connection.close()
-    audit(request, principal, "production.operation.complete", order_no,
+    audit(request, principal, "production.operation.complete", entity_id,
           {"operation_code": operation_code, "sequence_no": payload.sequenceNo,
            "accepted_qty": str(payload.acceptedQty), "rejected_qty": str(payload.rejectedQty),
            "waste_qty": str(payload.wasteQty)})
