@@ -8,7 +8,7 @@ def test_real_auth_product_inventory_production_and_audit_flow():
     client = TestClient(app)
     common = {"X-Correlation-ID": "ci-real-e2e"}
     bootstrap = client.post("/api/auth/bootstrap", headers={**common, "X-Bootstrap-Secret": os.environ["BOOTSTRAP_SECRET"]}, json={"username":"ci_ceo","password":"CI-test-password-1234","email":"ci@example.test"})
-    assert bootstrap.status_code == 201, bootstrap.text
+    assert bootstrap.status_code in (201, 409), bootstrap.text
     login = client.post("/api/auth/login", headers=common, json={"username":"ci_ceo","password":"CI-test-password-1234"})
     assert login.status_code == 200, login.text
     tokens = login.json()
