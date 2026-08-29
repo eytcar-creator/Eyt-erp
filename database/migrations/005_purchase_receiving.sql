@@ -1,10 +1,19 @@
 -- E.Y.T ERP | Migration 005 | Purchase + Receiving v1
 BEGIN;
 
+CREATE TABLE IF NOT EXISTS eyt_suppliers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    supplier_code VARCHAR(60) NOT NULL UNIQUE,
+    name VARCHAR(200) NOT NULL,
+    phone VARCHAR(80),
+    status VARCHAR(30) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS purchase_orders_v1 (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     order_no VARCHAR(60) NOT NULL UNIQUE,
-    supplier_id UUID NOT NULL REFERENCES suppliers(id),
+    supplier_id UUID NOT NULL REFERENCES eyt_suppliers(id),
     warehouse_code VARCHAR(60) NOT NULL REFERENCES warehouses(code),
     order_date DATE NOT NULL DEFAULT CURRENT_DATE,
     expected_date DATE,
