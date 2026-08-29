@@ -16,6 +16,16 @@ class ProductCreate(BaseModel):
     category_id: UUID | None = None
     unit: str = Field(default="PCS", max_length=30)
     barcode: str | None = Field(default=None, max_length=100)
+    oem_code: str | None = Field(default=None, max_length=120)
+    brand: str | None = Field(default=None, max_length=120)
+    material: str | None = Field(default=None, max_length=120)
+    weight_kg: Decimal | None = Field(default=None, ge=0)
+    cost_price: Decimal = Field(default=Decimal("0"), ge=0)
+    sale_price: Decimal = Field(default=Decimal("0"), ge=0)
+    min_stock: Decimal = Field(default=Decimal("0"), ge=0)
+    is_sellable: bool = True
+    is_purchasable: bool = True
+    image_url: str | None = None
 
 
 class StockTransaction(BaseModel):
@@ -32,6 +42,13 @@ async def require_engine():
         raise HTTPException(status_code=503, detail="Database is not configured")
 
 
+PRODUCT_COLUMNS = """
+    p.id, p.sku, p.name_fa, p.category_id, p.unit, p.barcode, p.oem_code,
+    p.brand, p.material, p.weight_kg, p.cost_price, p.sale_price,
+    p.min_stock, p.is_sellable, p.is_purchasable, p.image_url, p.is_active
+"""
+
+
 @router.get("/products")
 async def list_products(
     q: str | None = Query(default=None, max_length=100),
@@ -40,18 +57,19 @@ async def list_products(
     offset: int = Query(default=0, ge=0),
 ):
     await require_engine()
-    filters = ["is_active = true"] if active_only else []
+    filters = ["p.is_active = true"] if active_only else []
     params = {"limit": limit, "offset": offset}
     if q:
-        filters.append("(sku ILIKE :q OR name_fa ILIKE :q OR barcode ILIKE :q)")
+        filters.append("(p.sku ILIKE :q OR p.name_fa ILIKE :q OR p.barcode ILIKE :q OR p.oem_code ILIKE :q)")
         params["q"] = f"%{q}%"
     where = " AND ".join(filters) or "TRUE"
     async with engine.connect() as conn:
         result = await conn.execute(text(f"""
-            SELECT id, sku, name_fa, category_id, unit, barcode, is_active
-            FROM products
+            SELECT {PRODUCT_COLUMNS}, c.name_fa AS category_name
+            FROM products p
+            LEFT JOIN product_categories c ON c.id = p.category_id
             WHERE {where}
-            ORDER BY sku
+            ORDER BY p.sku
             LIMIT :limit OFFSET :offset
         """), params)
         return [dict(row._mapping) for row in result]
@@ -65,9 +83,14 @@ async def create_product(payload: ProductCreate):
         if exists.first():
             raise HTTPException(status_code=409, detail="SKU already exists")
         result = await conn.execute(text("""
-            INSERT INTO products (sku, name_fa, category_id, unit, barcode)
-            VALUES (:sku, :name_fa, :category_id, :unit, :barcode)
-            RETURNING id, sku, name_fa, category_id, unit, barcode, is_active
+            INSERT INTO products
+              (sku, name_fa, category_id, unit, barcode, oem_code, brand, material,
+               weight_kg, cost_price, sale_price, min_stock, is_sellable, is_purchasable, image_url)
+            VALUES
+              (:sku, :name_fa, :category_id, :unit, :barcode, :oem_code, :brand, :material,
+               :weight_kg, :cost_price, :sale_price, :min_stock, :is_sellable, :is_purchasable, :image_url)
+            RETURNING id, sku, name_fa, category_id, unit, barcode, oem_code, brand, material,
+                      weight_kg, cost_price, sale_price, min_stock, is_sellable, is_purchasable, image_url, is_active
         """), payload.model_dump())
         return dict(result.first()._mapping)
 
@@ -76,9 +99,8 @@ async def create_product(payload: ProductCreate):
 async def get_product(product_id: UUID):
     await require_engine()
     async with engine.connect() as conn:
-        result = await conn.execute(text("""
-            SELECT p.id, p.sku, p.name_fa, p.category_id, p.unit, p.barcode, p.is_active,
-                   c.name_fa AS category_name
+        result = await conn.execute(text(f"""
+            SELECT {PRODUCT_COLUMNS}, c.name_fa AS category_name
             FROM products p
             LEFT JOIN product_categories c ON c.id = p.category_id
             WHERE p.id = :id
