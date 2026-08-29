@@ -46,5 +46,6 @@ jobs:
           PGPASSWORD=eyt_test psql -h localhost -U eyt_user -d eyt_erp_test -v ON_ERROR_STOP=1 -f database/migrations/002_production_indexes.sql
           PGPASSWORD=eyt_test psql -h localhost -U eyt_user -d eyt_erp_test -v ON_ERROR_STOP=1 -f database/migrations/003_identity_rbac.sql
           PGPASSWORD=eyt_test psql -h localhost -U eyt_user -d eyt_erp_test -v ON_ERROR_STOP=1 -f database/migrations/004_product_master_inventory.sql
+          PGPASSWORD=eyt_test psql -h localhost -U eyt_user -d eyt_erp_test -v ON_ERROR_STOP=1 -f database/migrations/005_purchase_receiving.sql
       - name: Run tests
         run: pytest -q
