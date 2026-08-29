@@ -6,12 +6,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-eyt_erp}
       POSTGRES_USER: ${POSTGRES_USER:-eyt}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
-    ports:
-      - "127.0.0.1:5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: [postgres_data:/var/lib/postgresql/data]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test: ["CMD-SHELL","pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -19,31 +17,28 @@ services:
   redis:
     image: redis:8-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "127.0.0.1:6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    command: ["redis-server","--appendonly","yes"]
+    volumes: [redis_data:/data]
 
   api:
     build: ./api
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://eyt:${POSTGRES_PASSWORD}@postgres:5432/eyt_erp}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      APP_ENV: ${APP_ENV:-development}
+      APP_ENV: ${APP_ENV:-production}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-    ports:
-      - "127.0.0.1:8000:8000"
+    ports: ["127.0.0.1:8000:8000"]
+
+  portal:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    volumes:
+      - ./portal:/usr/share/nginx/html:ro
+    depends_on: [api]
+    ports: ["127.0.0.1:8080:80"]
 
 volumes:
   postgres_data:
