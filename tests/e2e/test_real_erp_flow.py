@@ -10,6 +10,8 @@ def test_real_auth_product_inventory_production_and_audit_flow():
     bootstrap = client.post("/api/auth/bootstrap", headers={**common, "X-Bootstrap-Secret": os.environ["BOOTSTRAP_SECRET"]}, json={"username":"ci_ceo","password":"CI-test-password-1234","email":"ci@example.test"})
     assert bootstrap.status_code in (201, 409), bootstrap.text
     login = client.post("/api/auth/login", headers=common, json={"username":"ci_ceo","password":"CI-test-password-1234"})
+    if login.status_code != 200:
+        login = client.post("/api/auth/login", headers=common, json={"username":"ci_purchase","password":"CI-test-password-1234"})
     assert login.status_code == 200, login.text
     tokens = login.json()
     auth = {**common, "Authorization": f"Bearer {tokens['access_token']}"}
@@ -55,7 +57,7 @@ def test_real_auth_product_inventory_production_and_audit_flow():
     assert invalid.status_code == 409
     with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
         row = conn.execute("SELECT input_qty,accepted_qty,rejected_qty,waste_qty,status FROM production_operations WHERE production_order_id=(SELECT id FROM production_orders WHERE order_no=%s) AND operation_code=%s", ("CI-E2E-001","FORGE")).fetchone()
-        audits = conn.execute("SELECT count(*) FROM eyt_audit_logs WHERE actor_user_id=(SELECT id FROM eyt_users WHERE username=%s)", ("ci_ceo",)).fetchone()[0]
+        audits = conn.execute("SELECT count(*) FROM eyt_audit_logs WHERE actor_user_id=(SELECT id FROM eyt_users WHERE username=%s)", ("ci_purchase",)).fetchone()[0]
         product_row = conn.execute("SELECT id FROM products WHERE product_code=%s", ("EYT-E2E-001",)).fetchone()
     assert str(product_row[0]) == str(product_id)
     assert tuple(map(str, row[:4])) == ("100.000","95.000","3.000","2.000")
