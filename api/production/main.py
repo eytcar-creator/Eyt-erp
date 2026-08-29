@@ -2,10 +2,11 @@ from fastapi import FastAPI
 
 from .fastapi_app import app as base_app
 from .operation_api import router as operation_router
+from .auth import router as auth_router
 
-app = base_app or FastAPI(title="E.Y.T Production API", version="0.1.0")
+app = base_app or FastAPI(title="E.Y.T Production API", version="0.2.0")
+app.include_router(auth_router)
 app.include_router(operation_router)
-
 
 @app.get("/health", tags=["system"])
 def health() -> dict[str, str]:

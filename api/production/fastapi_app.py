@@ -1,22 +1,18 @@
-"""Optional FastAPI adapter for the E.Y.T production API.
-
-The application is intentionally small and keeps the PostgreSQL dependency
-outside import time. Configure DATABASE_URL in the deployment environment.
-"""
+"""FastAPI adapter for the E.Y.T production API."""
 from decimal import Decimal
 import os
 
 try:
-    from fastapi import FastAPI, HTTPException
+    from fastapi import Depends, FastAPI, HTTPException
     from pydantic import BaseModel
 except ImportError:  # pragma: no cover
     FastAPI = None
 
 from .postgres_repository import PostgresProductionRepository
-
+from .auth import require_permission
 
 if FastAPI is not None:
-    app = FastAPI(title="E.Y.T Production API", version="0.1.0")
+    app = FastAPI(title="E.Y.T Production API", version="0.2.0")
 
     class OrderInput(BaseModel):
         orderNo: str
@@ -27,7 +23,7 @@ if FastAPI is not None:
         customerId: int | None = None
 
     @app.get("/api/production/orders/{order_no}")
-    def get_order(order_no: str):
+    def get_order(order_no: str, _=Depends(require_permission("production.read"))):
         import psycopg
         database_url = os.environ.get("DATABASE_URL")
         if not database_url:
@@ -39,16 +35,13 @@ if FastAPI is not None:
         return result
 
     @app.post("/api/production/orders", status_code=201)
-    def create_order(payload: OrderInput):
+    def create_order(payload: OrderInput, _=Depends(require_permission("production.execute"))):
         import psycopg
         database_url = os.environ.get("DATABASE_URL")
         if not database_url:
             raise HTTPException(status_code=500, detail="DATABASE_URL is not configured")
         with psycopg.connect(database_url) as conn:
-            PostgresProductionRepository(conn).create_order(
-                payload.orderNo, payload.productCode, payload.productName,
-                payload.targetQty, payload.orderDate, payload.customerId,
-            )
+            PostgresProductionRepository(conn).create_order(payload.orderNo, payload.productCode, payload.productName, payload.targetQty, payload.orderDate, payload.customerId)
         return {"orderNo": payload.orderNo, "status": "planned"}
 else:
     app = None
