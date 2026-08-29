@@ -21,7 +21,6 @@ PERMISSIONS = {"production.read", "production.execute", "qc.inspect", "qc.releas
 
 class LoginInput(BaseModel):
     username: str = Field(min_length=1, max_length=120)
-    password: str = Field(min_length=8, max_length=200)
 class RefreshInput(BaseModel):
     refresh_token: str = Field(min_length=40, max_length=300)
 class BootstrapInput(BaseModel):
@@ -83,9 +82,19 @@ def require_permission(code: str) -> Callable:
         return principal
     return dependency
 
+def _audit_entity_id(conn, entity_id):
+    if entity_id is None or isinstance(entity_id, UUID):
+        return entity_id
+    try:
+        return UUID(str(entity_id))
+    except (ValueError, TypeError, AttributeError):
+        row = conn.execute("SELECT id FROM production_orders WHERE order_no=%s", (str(entity_id),)).fetchone()
+        return row[0] if row else None
+
 def audit(request: Request, principal: dict, action: str, entity_id=None, metadata=None):
     with db_connection() as conn:
-        conn.execute("INSERT INTO eyt_audit_logs(actor_user_id,action,entity_id,correlation_id,ip_address,metadata) VALUES(%s,%s,%s,%s,%s,%s)", (principal["id"], action, entity_id, request.headers.get("X-Correlation-ID") or secrets.token_hex(16), request.client.host if request.client else None, Json(metadata or {})))
+        normalized_entity_id = _audit_entity_id(conn, entity_id)
+        conn.execute("INSERT INTO eyt_audit_logs(actor_user_id,action,entity_id,correlation_id,ip_address,metadata) VALUES(%s,%s,%s,%s,%s,%s)", (principal["id"], action, normalized_entity_id, request.headers.get("X-Correlation-ID") or secrets.token_hex(16), request.client.host if request.client else None, Json(metadata or {})))
         conn.commit()
 
 @router.post("/bootstrap", status_code=201)
