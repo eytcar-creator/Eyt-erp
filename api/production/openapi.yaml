@@ -1,0 +1,156 @@
+openapi: 3.0.3
+info:
+  title: E.Y.T Production API
+  version: 0.1.0
+  description: Production lifecycle API for E.Y.T ERP.
+servers:
+  - url: /api
+paths:
+  /production/orders:
+    post:
+      summary: Create production order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductionOrderInput'
+      responses:
+        '201':
+          description: Created
+  /production/orders/{orderNo}:
+    get:
+      summary: Get production order
+      parameters:
+        - $ref: '#/components/parameters/OrderNo'
+      responses:
+        '200':
+          description: Production order
+        '404':
+          description: Not found
+  /production/orders/{orderNo}/operations/{operationCode}/start:
+    post:
+      summary: Start production operation
+      parameters:
+        - $ref: '#/components/parameters/OrderNo'
+        - $ref: '#/components/parameters/OperationCode'
+      responses:
+        '200':
+          description: Operation started
+  /production/orders/{orderNo}/operations/{operationCode}/complete:
+    post:
+      summary: Complete production operation
+      parameters:
+        - $ref: '#/components/parameters/OrderNo'
+        - $ref: '#/components/parameters/OperationCode'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationCompletion'
+      responses:
+        '200':
+          description: Operation completed
+        '409':
+          description: Quantity reconciliation or state error
+  /production/orders/{orderNo}/qc:
+    post:
+      summary: Record quality inspection
+      parameters:
+        - $ref: '#/components/parameters/OrderNo'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QcInput'
+      responses:
+        '200':
+          description: QC recorded
+  /production/orders/{orderNo}/costs:
+    post:
+      summary: Record production cost
+      parameters:
+        - $ref: '#/components/parameters/OrderNo'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CostInput'
+      responses:
+        '201':
+          description: Cost recorded
+  /production/orders/{orderNo}/prepayments:
+    post:
+      summary: Record customer prepayment
+      parameters:
+        - $ref: '#/components/parameters/OrderNo'
+      responses:
+        '201':
+          description: Prepayment recorded
+  /production/orders/{orderNo}/collections:
+    post:
+      summary: Record collection
+      parameters:
+        - $ref: '#/components/parameters/OrderNo'
+      responses:
+        '201':
+          description: Collection recorded
+components:
+  parameters:
+    OrderNo:
+      name: orderNo
+      in: path
+      required: true
+      schema: { type: string }
+    OperationCode:
+      name: operationCode
+      in: path
+      required: true
+      schema: { type: string }
+  schemas:
+    ProductionOrderInput:
+      type: object
+      required: [orderNo, productCode, productName, targetQty, orderDate]
+      properties:
+        orderNo: { type: string }
+        productCode: { type: string }
+        productName: { type: string }
+        targetQty: { type: number }
+        orderDate: { type: string, format: date }
+        plannedStart: { type: string, format: date }
+        plannedEnd: { type: string, format: date }
+        customerId: { type: integer, nullable: true }
+    OperationCompletion:
+      type: object
+      required: [inputQty, acceptedQty, rejectedQty, wasteQty]
+      properties:
+        inputQty: { type: number }
+        acceptedQty: { type: number }
+        rejectedQty: { type: number }
+        wasteQty: { type: number }
+        serviceCost: { type: number }
+        transportCost: { type: number }
+        contractorName: { type: string }
+        wasteReason: { type: string }
+    QcInput:
+      type: object
+      required: [inspectedQty, acceptedQty, rejectedQty, result]
+      properties:
+        inspectedQty: { type: number }
+        acceptedQty: { type: number }
+        rejectedQty: { type: number }
+        result: { type: string, enum: [pass, fail, conditional] }
+        inspectorName: { type: string }
+        reportNo: { type: string }
+    CostInput:
+      type: object
+      required: [costType, amount]
+      properties:
+        costType: { type: string }
+        description: { type: string }
+        amount: { type: number }
+        incurredDate: { type: string, format: date }
+        contractorName: { type: string }
