@@ -38,12 +38,12 @@ def test_real_auth_product_inventory_production_and_audit_flow():
     assert received.status_code == 201, received.text
     balance = client.get("/api/inventory/balance/EYT-E2E-001/MAIN", headers=auth)
     assert balance.status_code == 200
-    assert str(balance.json()["onHand"]) == "100"
+    assert balance.json()["onHand"] == 100
     reservation = client.post("/api/inventory/reservations", headers=auth, json={
         "productCode":"EYT-E2E-001","warehouseCode":"MAIN","referenceType":"SALES_ORDER","referenceId":"SO-E2E-001","quantity":20,
     })
     assert reservation.status_code == 201, reservation.text
-    assert str(client.get("/api/inventory/balance/EYT-E2E-001/MAIN", headers=auth).json()["available"]) == "80"
+    assert client.get("/api/inventory/balance/EYT-E2E-001/MAIN", headers=auth).json()["available"] == 80
     assert client.post(f"/api/inventory/reservations/{reservation.json()['id']}/release", headers=auth).status_code == 200
 
     order = client.post("/api/production/orders", headers=auth, json={"orderNo":"CI-E2E-001","productCode":"EYT-E2E-001","productName":"Synthetic E.Y.T Test Part","targetQty":100,"orderDate":"2026-08-29"})
