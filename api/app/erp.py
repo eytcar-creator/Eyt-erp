@@ -1,10 +1,11 @@
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
+from .auth.service import audit, require_permission
 from .main import engine
 
 router = APIRouter(prefix="/api/v1", tags=["ERP Core"])
@@ -50,12 +51,9 @@ PRODUCT_COLUMNS = """
 
 
 @router.get("/products")
-async def list_products(
-    q: str | None = Query(default=None, max_length=100),
-    active_only: bool = True,
-    limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
-):
+async def list_products(q: str | None = Query(default=None, max_length=100), active_only: bool = True,
+                        limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0),
+                        principal: dict = Depends(require_permission("catalog.read"))):
     await require_engine()
     filters = ["p.is_active = true"] if active_only else []
     params = {"limit": limit, "offset": offset}
@@ -64,47 +62,33 @@ async def list_products(
         params["q"] = f"%{q}%"
     where = " AND ".join(filters) or "TRUE"
     async with engine.connect() as conn:
-        result = await conn.execute(text(f"""
-            SELECT {PRODUCT_COLUMNS}, c.name_fa AS category_name
-            FROM products p
-            LEFT JOIN product_categories c ON c.id = p.category_id
-            WHERE {where}
-            ORDER BY p.sku
-            LIMIT :limit OFFSET :offset
-        """), params)
+        result = await conn.execute(text(f"SELECT {PRODUCT_COLUMNS}, c.name_fa AS category_name FROM products p LEFT JOIN product_categories c ON c.id = p.category_id WHERE {where} ORDER BY p.sku LIMIT :limit OFFSET :offset"), params)
         return [dict(row._mapping) for row in result]
 
 
 @router.post("/products", status_code=201)
-async def create_product(payload: ProductCreate):
+async def create_product(payload: ProductCreate, request: Request,
+                         principal: dict = Depends(require_permission("admin.users.manage"))):
     await require_engine()
     async with engine.begin() as conn:
         exists = await conn.execute(text("SELECT 1 FROM products WHERE sku = :sku"), {"sku": payload.sku})
         if exists.first():
             raise HTTPException(status_code=409, detail="SKU already exists")
         result = await conn.execute(text("""
-            INSERT INTO products
-              (sku, name_fa, category_id, unit, barcode, oem_code, brand, material,
-               weight_kg, cost_price, sale_price, min_stock, is_sellable, is_purchasable, image_url)
-            VALUES
-              (:sku, :name_fa, :category_id, :unit, :barcode, :oem_code, :brand, :material,
-               :weight_kg, :cost_price, :sale_price, :min_stock, :is_sellable, :is_purchasable, :image_url)
-            RETURNING id, sku, name_fa, category_id, unit, barcode, oem_code, brand, material,
-                      weight_kg, cost_price, sale_price, min_stock, is_sellable, is_purchasable, image_url, is_active
+            INSERT INTO products (sku, name_fa, category_id, unit, barcode, oem_code, brand, material, weight_kg, cost_price, sale_price, min_stock, is_sellable, is_purchasable, image_url)
+            VALUES (:sku, :name_fa, :category_id, :unit, :barcode, :oem_code, :brand, :material, :weight_kg, :cost_price, :sale_price, :min_stock, :is_sellable, :is_purchasable, :image_url)
+            RETURNING id, sku, name_fa, category_id, unit, barcode, oem_code, brand, material, weight_kg, cost_price, sale_price, min_stock, is_sellable, is_purchasable, image_url, is_active
         """), payload.model_dump())
-        return dict(result.first()._mapping)
+        product = dict(result.first()._mapping)
+    await audit(request, principal, "product.create", "product", product["id"], {"sku": product["sku"]})
+    return product
 
 
 @router.get("/products/{product_id}")
-async def get_product(product_id: UUID):
+async def get_product(product_id: UUID, principal: dict = Depends(require_permission("catalog.read"))):
     await require_engine()
     async with engine.connect() as conn:
-        result = await conn.execute(text(f"""
-            SELECT {PRODUCT_COLUMNS}, c.name_fa AS category_name
-            FROM products p
-            LEFT JOIN product_categories c ON c.id = p.category_id
-            WHERE p.id = :id
-        """), {"id": product_id})
+        result = await conn.execute(text(f"SELECT {PRODUCT_COLUMNS}, c.name_fa AS category_name FROM products p LEFT JOIN product_categories c ON c.id = p.category_id WHERE p.id = :id"), {"id": product_id})
         row = result.first()
         if not row:
             raise HTTPException(status_code=404, detail="Product not found")
@@ -112,96 +96,64 @@ async def get_product(product_id: UUID):
 
 
 @router.get("/inventory")
-async def inventory(product_id: UUID | None = None, warehouse_id: UUID | None = None):
+async def inventory(product_id: UUID | None = None, warehouse_id: UUID | None = None,
+                    principal: dict = Depends(require_permission("inventory.read"))):
     await require_engine()
-    filters = []
-    params = {}
+    filters, params = [], {}
     if product_id:
-        filters.append("ib.product_id = :product_id")
-        params["product_id"] = product_id
+        filters.append("ib.product_id = :product_id"); params["product_id"] = product_id
     if warehouse_id:
-        filters.append("ib.warehouse_id = :warehouse_id")
-        params["warehouse_id"] = warehouse_id
+        filters.append("ib.warehouse_id = :warehouse_id"); params["warehouse_id"] = warehouse_id
     where = " AND ".join(filters) or "TRUE"
     async with engine.connect() as conn:
         result = await conn.execute(text(f"""
-            SELECT ib.product_id, p.sku, p.name_fa, ib.warehouse_id,
-                   w.code AS warehouse_code, w.name_fa AS warehouse_name,
-                   ib.on_hand_qty, ib.reserved_qty,
-                   (ib.on_hand_qty - ib.reserved_qty) AS available_qty,
-                   ib.reorder_point, ib.updated_at
-            FROM inventory_balances ib
-            JOIN products p ON p.id = ib.product_id
-            JOIN warehouses w ON w.id = ib.warehouse_id
-            WHERE {where}
-            ORDER BY p.sku, w.code
+            SELECT ib.product_id, p.sku, p.name_fa, ib.warehouse_id, w.code AS warehouse_code,
+                   w.name_fa AS warehouse_name, ib.on_hand_qty, ib.reserved_qty,
+                   (ib.on_hand_qty - ib.reserved_qty) AS available_qty, ib.reorder_point, ib.updated_at
+            FROM inventory_balances ib JOIN products p ON p.id = ib.product_id JOIN warehouses w ON w.id = ib.warehouse_id
+            WHERE {where} ORDER BY p.sku, w.code
         """), params)
         return [dict(row._mapping) for row in result]
 
 
 @router.post("/inventory/transactions", status_code=201)
-async def post_stock_transaction(payload: StockTransaction):
+async def post_stock_transaction(payload: StockTransaction, request: Request,
+                                 principal: dict = Depends(require_permission("inventory.adjust"))):
     await require_engine()
     sign = 1 if payload.transaction_type in {"IN", "ADJUSTMENT"} else -1
     delta = payload.quantity * sign
     async with engine.begin() as conn:
-        product = await conn.execute(text("SELECT id FROM products WHERE id = :id AND is_active = true"), {"id": payload.product_id})
-        warehouse = await conn.execute(text("SELECT id FROM warehouses WHERE id = :id AND is_active = true"), {"id": payload.warehouse_id})
-        if not product.first() or not warehouse.first():
-            raise HTTPException(status_code=404, detail="Product or warehouse not found")
-        duplicate = await conn.execute(text("SELECT 1 FROM inventory_transactions WHERE transaction_no = :no"), {"no": payload.transaction_no})
-        if duplicate.first():
+        if not (await conn.execute(text("SELECT 1 FROM products WHERE id = :id AND is_active = true"), {"id": payload.product_id})).first():
+            raise HTTPException(status_code=404, detail="Product not found")
+        if not (await conn.execute(text("SELECT 1 FROM warehouses WHERE id = :id AND is_active = true"), {"id": payload.warehouse_id})).first():
+            raise HTTPException(status_code=404, detail="Warehouse not found")
+        if (await conn.execute(text("SELECT 1 FROM inventory_transactions WHERE transaction_no = :no"), {"no": payload.transaction_no})).first():
             raise HTTPException(status_code=409, detail="Transaction number already exists")
-        balance = await conn.execute(text("""
-            SELECT on_hand_qty, reserved_qty
-            FROM inventory_balances
-            WHERE product_id = :product_id AND warehouse_id = :warehouse_id
-            FOR UPDATE
-        """), {"product_id": payload.product_id, "warehouse_id": payload.warehouse_id})
-        row = balance.first()
-        on_hand = Decimal(row.on_hand_qty) if row else Decimal("0")
-        reserved = Decimal(row.reserved_qty) if row else Decimal("0")
+        row = (await conn.execute(text("SELECT on_hand_qty, reserved_qty FROM inventory_balances WHERE product_id = :product_id AND warehouse_id = :warehouse_id FOR UPDATE"), {"product_id": payload.product_id, "warehouse_id": payload.warehouse_id})).first()
+        on_hand, reserved = (Decimal(row.on_hand_qty), Decimal(row.reserved_qty)) if row else (Decimal("0"), Decimal("0"))
         new_on_hand = on_hand + delta
         if new_on_hand < reserved or new_on_hand < 0:
             raise HTTPException(status_code=409, detail="Insufficient available stock")
         if row:
-            await conn.execute(text("""
-                UPDATE inventory_balances
-                SET on_hand_qty = :qty, updated_at = now()
-                WHERE product_id = :product_id AND warehouse_id = :warehouse_id
-            """), {"qty": new_on_hand, "product_id": payload.product_id, "warehouse_id": payload.warehouse_id})
+            await conn.execute(text("UPDATE inventory_balances SET on_hand_qty = :qty, updated_at = now() WHERE product_id = :product_id AND warehouse_id = :warehouse_id"), {"qty": new_on_hand, "product_id": payload.product_id, "warehouse_id": payload.warehouse_id})
         else:
-            await conn.execute(text("""
-                INSERT INTO inventory_balances (product_id, warehouse_id, on_hand_qty)
-                VALUES (:product_id, :warehouse_id, :qty)
-            """), {"product_id": payload.product_id, "warehouse_id": payload.warehouse_id, "qty": new_on_hand})
-        result = await conn.execute(text("""
-            INSERT INTO inventory_transactions
-              (transaction_no, product_id, warehouse_id, transaction_type, quantity, notes)
-            VALUES (:no, :product_id, :warehouse_id, :type, :quantity, :notes)
-            RETURNING id, transaction_no, product_id, warehouse_id, transaction_type, quantity, occurred_at
-        """), {
-            "no": payload.transaction_no,
-            "product_id": payload.product_id,
-            "warehouse_id": payload.warehouse_id,
-            "type": payload.transaction_type,
-            "quantity": payload.quantity,
-            "notes": payload.notes,
-        })
-        return dict(result.first()._mapping)
+            await conn.execute(text("INSERT INTO inventory_balances (product_id, warehouse_id, on_hand_qty) VALUES (:product_id, :warehouse_id, :qty)"), {"product_id": payload.product_id, "warehouse_id": payload.warehouse_id, "qty": new_on_hand})
+        result = await conn.execute(text("INSERT INTO inventory_transactions (transaction_no, product_id, warehouse_id, transaction_type, quantity, notes) VALUES (:no, :product_id, :warehouse_id, :type, :quantity, :notes) RETURNING id, transaction_no, product_id, warehouse_id, transaction_type, quantity, occurred_at"), {"no": payload.transaction_no, "product_id": payload.product_id, "warehouse_id": payload.warehouse_id, "type": payload.transaction_type, "quantity": payload.quantity, "notes": payload.notes})
+        transaction = dict(result.first()._mapping)
+    await audit(request, principal, "inventory.adjust", "inventory_transaction", transaction["id"], {"transaction_no": transaction["transaction_no"]})
+    return transaction
 
 
 @router.get("/dashboard/summary")
-async def dashboard_summary():
+async def dashboard_summary(principal: dict = Depends(require_permission("reporting.read"))):
     await require_engine()
     async with engine.connect() as conn:
         result = await conn.execute(text("""
-            SELECT
-              (SELECT count(*) FROM products WHERE is_active = true) AS active_products,
-              (SELECT count(*) FROM customers WHERE is_active = true) AS active_customers,
-              (SELECT count(*) FROM suppliers WHERE is_active = true) AS active_suppliers,
-              (SELECT coalesce(sum(on_hand_qty), 0) FROM inventory_balances) AS total_units_on_hand,
-              (SELECT count(*) FROM sales_orders WHERE status IN ('DRAFT','CONFIRMED','RESERVED','PARTIAL')) AS open_sales_orders,
-              (SELECT count(*) FROM production_orders WHERE status IN ('PLANNED','RELEASED','IN_PROGRESS')) AS active_production_orders
+            SELECT (SELECT count(*) FROM products WHERE is_active = true) AS active_products,
+                   (SELECT count(*) FROM customers WHERE is_active = true) AS active_customers,
+                   (SELECT count(*) FROM suppliers WHERE is_active = true) AS active_suppliers,
+                   (SELECT coalesce(sum(on_hand_qty), 0) FROM inventory_balances) AS total_units_on_hand,
+                   (SELECT count(*) FROM sales_orders WHERE status IN ('DRAFT','CONFIRMED','RESERVED','PARTIAL')) AS open_sales_orders,
+                   (SELECT count(*) FROM production_orders WHERE status IN ('PLANNED','RELEASED','IN_PROGRESS')) AS active_production_orders
         """))
         return dict(result.first()._mapping)
