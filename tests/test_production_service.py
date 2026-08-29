@@ -49,4 +49,22 @@ def test_prepayment_reduces_holding_cost_base():
         )
     )
     cost = order.capital_holding_cost(Decimal("30"), Decimal("0.30"))
-    assert cost == Decimal("3698630.14")
+    assert cost == Decimal("2687671.23")
+
+
+def test_prepayment_has_a_real_financial_effect():
+    order = make_order()
+    order.add_operation(
+        OperationResult(
+            "FORGE",
+            Decimal("2000"),
+            Decimal("2000"),
+            service_cost=Decimal("10000000"),
+            transport_cost=Decimal("1000000"),
+        )
+    )
+    with_prepayment = order.capital_holding_cost(Decimal("30"), Decimal("0.30"))
+    order.customer_prepayment = Decimal("0")
+    without_prepayment = order.capital_holding_cost(Decimal("30"), Decimal("0.30"))
+    assert with_prepayment < without_prepayment
+    assert without_prepayment - with_prepayment == Decimal("493150.68")
