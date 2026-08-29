@@ -46,7 +46,7 @@ class BomInput(BaseModel):
     productCode: str = Field(min_length=1, max_length=100)
     version: str = Field(min_length=1, max_length=30)
     status: str = "DRAFT"
-    items: list[BomItemInput] = []
+    items: list[BomItemInput] = Field(default_factory=list)
 
 
 def _connect():
@@ -59,6 +59,10 @@ def _connect():
 
 def _signed_case() -> str:
     return "CASE WHEN transaction_type IN ('RECEIPT','TRANSFER_IN','RETURN','PRODUCTION_RECEIPT','ADJUSTMENT') THEN quantity ELSE -quantity END"
+
+
+def _lock_key(product_code: str, warehouse_code: str) -> str:
+    return f"{product_code}:{warehouse_code}"
 
 
 @router.get("/balance/{product_code}/{warehouse_code}")
@@ -77,7 +81,8 @@ def create_transaction(payload: TransactionInput, _=Depends(require_permission("
     if tx_type not in ALL_TYPES:
         raise HTTPException(status_code=422, detail="Unsupported transaction type")
     with _connect() as conn, conn.cursor() as cur:
-        cur.execute(f"SELECT COALESCE(SUM({_signed_case()}),0) FROM inventory_transactions WHERE product_code=%s AND warehouse_code=%s FOR UPDATE", (payload.productCode, payload.warehouseCode))
+        cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (_lock_key(payload.productCode, payload.warehouseCode),))
+        cur.execute(f"SELECT COALESCE(SUM({_signed_case()}),0) FROM inventory_transactions WHERE product_code=%s AND warehouse_code=%s", (payload.productCode, payload.warehouseCode))
         current = cur.fetchone()[0]
         cur.execute("SELECT COALESCE(SUM(quantity),0) FROM inventory_reservations WHERE product_code=%s AND warehouse_code=%s AND status='RESERVED'", (payload.productCode, payload.warehouseCode))
         reserved = cur.fetchone()[0]
@@ -94,6 +99,7 @@ def create_transaction(payload: TransactionInput, _=Depends(require_permission("
 @router.post("/reservations", status_code=201)
 def reserve(payload: ReservationInput, _=Depends(require_permission("inventory.execute"))):
     with _connect() as conn, conn.cursor() as cur:
+        cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (_lock_key(payload.productCode, payload.warehouseCode),))
         cur.execute(f"SELECT COALESCE(SUM({_signed_case()}),0) FROM inventory_transactions WHERE product_code=%s AND warehouse_code=%s", (payload.productCode, payload.warehouseCode))
         on_hand = cur.fetchone()[0]
         cur.execute("SELECT COALESCE(SUM(quantity),0) FROM inventory_reservations WHERE product_code=%s AND warehouse_code=%s AND status='RESERVED'", (payload.productCode, payload.warehouseCode))
