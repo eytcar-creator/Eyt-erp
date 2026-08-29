@@ -9,6 +9,11 @@ if config.config_file_name:
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL:
+    # SQLAlchemy 2.x uses the psycopg v3 driver via the +psycopg dialect.
+    if DATABASE_URL.startswith("postgresql://"):
+        DATABASE_URL = "postgresql+psycopg://" + DATABASE_URL[len("postgresql://"):]
+    elif DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = "postgresql+psycopg://" + DATABASE_URL[len("postgres://"):]
     config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
 def run_migrations_offline():
