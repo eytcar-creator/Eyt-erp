@@ -26,22 +26,15 @@ PERMISSIONS = {
 
 class LoginInput(BaseModel):
     username: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=8, max_length=200)
+
 class RefreshInput(BaseModel):
     refresh_token: str = Field(min_length=40, max_length=300)
+
 class BootstrapInput(BaseModel):
     username: str = Field(min_length=3, max_length=120)
     password: str = Field(min_length=12, max_length=200)
     email: str | None = Field(default=None, max_length=250)
-
-# Password is intentionally declared separately to preserve the existing login contract.
-LoginInput.model_rebuild()
-LoginInput.__annotations__["password"] = str
-
-# Re-declare the model cleanly for Pydantic schema generation.
-class LoginInput(BaseModel):
-    username: str = Field(min_length=1, max_length=120)
-    password: str = Field(min_length=8, max_length=200)
-
 
 def db_connection():
     url = os.getenv("DATABASE_URL")
