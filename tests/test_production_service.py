@@ -67,4 +67,6 @@ def test_prepayment_has_a_real_financial_effect():
     order.customer_prepayment = Decimal("0")
     without_prepayment = order.capital_holding_cost(Decimal("30"), Decimal("0.30"))
     assert with_prepayment < without_prepayment
-    assert without_prepayment - with_prepayment == Decimal("493150.68")
+    # Each monetary result is rounded to 2 decimals by the service. The
+    # difference of those rounded results is therefore 493,150.69.
+    assert without_prepayment - with_prepayment == Decimal("493150.69")
