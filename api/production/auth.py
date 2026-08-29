@@ -21,7 +21,7 @@ PERMISSIONS = {
     "production.read", "production.execute", "qc.inspect", "qc.release",
     "reporting.read", "admin.users.manage", "admin.roles.manage",
     "product.read", "product.write", "inventory.read", "inventory.execute",
-    "inventory.write", "procurement.read",
+    "inventory.write", "procurement.read", "procurement.write", "procurement.receive",
 }
 
 class LoginInput(BaseModel):
