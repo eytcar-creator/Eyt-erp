@@ -2,9 +2,6 @@
 
 Revision ID: 0016
 Revision chain: 0015 -> 0016
-
-The schema intentionally uses business keys (product_code/warehouse_code) so it
-can be introduced without coupling to legacy product/warehouse table shapes.
 """
 from alembic import op
 import sqlalchemy as sa
@@ -16,9 +13,10 @@ depends_on = None
 
 
 def upgrade():
+    identity = sa.Identity(always=False)
     op.create_table(
         "inventory_transactions",
-        sa.Column("id", sa.BigInteger(), primary_key=True),
+        sa.Column("id", sa.BigInteger(), identity=identity, primary_key=True),
         sa.Column("product_code", sa.String(100), nullable=False),
         sa.Column("warehouse_code", sa.String(100), nullable=False),
         sa.Column("quantity", sa.Numeric(18, 6), nullable=False),
@@ -36,7 +34,7 @@ def upgrade():
 
     op.create_table(
         "inventory_reservations",
-        sa.Column("id", sa.BigInteger(), primary_key=True),
+        sa.Column("id", sa.BigInteger(), identity=sa.Identity(always=False), primary_key=True),
         sa.Column("product_code", sa.String(100), nullable=False),
         sa.Column("warehouse_code", sa.String(100), nullable=False),
         sa.Column("reference_type", sa.String(50), nullable=False),
@@ -51,7 +49,7 @@ def upgrade():
 
     op.create_table(
         "bom_versions",
-        sa.Column("id", sa.BigInteger(), primary_key=True),
+        sa.Column("id", sa.BigInteger(), identity=sa.Identity(always=False), primary_key=True),
         sa.Column("bom_code", sa.String(100), nullable=False),
         sa.Column("product_code", sa.String(100), nullable=False),
         sa.Column("version", sa.String(30), nullable=False),
@@ -63,7 +61,7 @@ def upgrade():
     )
     op.create_table(
         "bom_items",
-        sa.Column("id", sa.BigInteger(), primary_key=True),
+        sa.Column("id", sa.BigInteger(), identity=sa.Identity(always=False), primary_key=True),
         sa.Column("bom_version_id", sa.BigInteger(), sa.ForeignKey("bom_versions.id", ondelete="CASCADE"), nullable=False),
         sa.Column("component_code", sa.String(100), nullable=False),
         sa.Column("quantity", sa.Numeric(18, 6), nullable=False),
@@ -75,7 +73,7 @@ def upgrade():
 
     op.create_table(
         "production_costs",
-        sa.Column("id", sa.BigInteger(), primary_key=True),
+        sa.Column("id", sa.BigInteger(), identity=sa.Identity(always=False), primary_key=True),
         sa.Column("production_order_no", sa.String(80), nullable=False),
         sa.Column("material_cost", sa.Numeric(18, 4), nullable=False, server_default="0"),
         sa.Column("operation_cost", sa.Numeric(18, 4), nullable=False, server_default="0"),
