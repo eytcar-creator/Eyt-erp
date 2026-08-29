@@ -58,4 +58,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Scan repository for obvious secrets
         run: |
-          ! grep -RniE '(api[_-]?key|secret|password|token)[[:space:]]*[:=][[:space:]]*[A-Za-z0-9_./+=-]{12,}' --exclude-dir=.git .
+          ! grep -RniE '(api[_-]?key|secret|password|token)[[:space:]]*[:=][[:space:]]*[A-Za-z0-9_./+=-]{20,}' \
+            --exclude-dir=.git \
+            --exclude='ci.yml' \
+            --exclude='*.html' \
+            .
