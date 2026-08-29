@@ -17,13 +17,20 @@ ALGORITHM = "HS256"
 ACCESS_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES", "15"))
 REFRESH_DAYS = int(os.getenv("REFRESH_TOKEN_DAYS", "30"))
 
-PERMISSIONS = {"production.read", "production.execute", "qc.inspect", "qc.release", "reporting.read", "admin.users.manage", "admin.roles.manage"}
+PERMISSIONS = {
+    "production.read", "production.execute", "qc.inspect", "qc.release",
+    "reporting.read", "admin.users.manage", "admin.roles.manage",
+    "product.read", "product.write", "inventory.read", "inventory.execute",
+    "inventory.write", "procurement.read",
+}
 
 class LoginInput(BaseModel):
     username: str = Field(min_length=1, max_length=120)
     password: str = Field(min_length=8, max_length=200)
+
 class RefreshInput(BaseModel):
     refresh_token: str = Field(min_length=40, max_length=300)
+
 class BootstrapInput(BaseModel):
     username: str = Field(min_length=3, max_length=120)
     password: str = Field(min_length=12, max_length=200)
@@ -84,10 +91,8 @@ def require_permission(code: str) -> Callable:
     return dependency
 
 def _audit_entity_id(conn, entity_id):
-    if entity_id is None or isinstance(entity_id, UUID):
-        return entity_id
-    try:
-        return UUID(str(entity_id))
+    if entity_id is None or isinstance(entity_id, UUID): return entity_id
+    try: return UUID(str(entity_id))
     except (ValueError, TypeError, AttributeError):
         row = conn.execute("SELECT id FROM production_orders WHERE order_no=%s", (str(entity_id),)).fetchone()
         return row[0] if row else None
