@@ -1,0 +1,36 @@
+{
+  "policy_id": "EYT-PRICING-V1",
+  "version": "1.0",
+  "status": "active",
+  "basis": "MRP",
+  "channels": {
+    "consumer": { "mrp_percent": 100, "discount_percent": 0 },
+    "dealer": { "mrp_percent": 85, "discount_percent": 15 },
+    "distributor": { "mrp_percent": 78, "discount_percent": 22 },
+    "representative": { "mrp_percent": 72, "discount_percent": 28 },
+    "provincial_representative_volume": { "mrp_percent": 68, "discount_percent": 32 }
+  },
+  "incentives": {
+    "cash_payment_percent": 2,
+    "volume_percent_min": 2,
+    "volume_percent_max": 5,
+    "monthly_target_percent": 2,
+    "quarterly_target_percent_min": 2,
+    "quarterly_target_percent_max": 3,
+    "new_customer_bonus": "separate_performance_reward"
+  },
+  "rules": {
+    "floor_price_required": true,
+    "below_floor_requires_central_approval": true,
+    "credit_limit_control": true,
+    "central_change_log_required": true,
+    "product_family_coefficients_may_differ": true
+  },
+  "formulas": {
+    "mrp": "actual_cost * sku_pricing_coefficient",
+    "dealer": "mrp * 0.85",
+    "distributor": "mrp * 0.78",
+    "representative": "mrp * 0.72",
+    "provincial_representative_volume": "mrp * 0.68"
+  }
+}
