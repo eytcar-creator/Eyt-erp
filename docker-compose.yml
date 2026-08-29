@@ -16,17 +16,35 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api:
     build: ./api
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://eyt:${POSTGRES_PASSWORD}@postgres:5432/eyt_erp}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       APP_ENV: ${APP_ENV:-development}
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     ports:
       - "127.0.0.1:8000:8000"
 
 volumes:
   postgres_data:
+  redis_data:
