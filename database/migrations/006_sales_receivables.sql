@@ -55,6 +55,15 @@ CREATE TABLE IF NOT EXISTS invoices (
     CHECK (status IN ('ISSUED','PARTIALLY_PAID','PAID','VOID'))
 );
 
+CREATE TABLE IF NOT EXISTS invoice_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    product_id UUID NOT NULL REFERENCES products(id),
+    quantity NUMERIC(18,6) NOT NULL CHECK (quantity > 0),
+    unit_price NUMERIC(18,6) NOT NULL CHECK (unit_price >= 0),
+    unit_cost NUMERIC(18,6) NOT NULL CHECK (unit_cost >= 0)
+);
+
 CREATE TABLE IF NOT EXISTS payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID NOT NULL REFERENCES customers(id),
@@ -77,6 +86,7 @@ CREATE TABLE IF NOT EXISTS payment_allocations (
 CREATE INDEX IF NOT EXISTS idx_sales_orders_customer_status ON sales_orders(customer_id,status,order_date);
 CREATE INDEX IF NOT EXISTS idx_sales_items_product ON sales_order_items(product_id);
 CREATE INDEX IF NOT EXISTS idx_invoices_customer_status ON invoices(customer_id,status,invoice_date);
+CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice ON invoice_items(invoice_id);
 CREATE INDEX IF NOT EXISTS idx_payments_customer_date ON payments(customer_id,payment_date);
 CREATE INDEX IF NOT EXISTS idx_payment_alloc_invoice ON payment_allocations(invoice_id);
 
