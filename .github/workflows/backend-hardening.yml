@@ -1,0 +1,43 @@
+name: Backend Hardening
+
+on:
+  push:
+    branches:
+      - main
+      - feat/backend-production-hardening
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  backend-hardening:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        working-directory: api
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+
+      - name: Compile check
+        run: python -m compileall -q api
+
+      - name: Run tests when present
+        run: |
+          if [ -d api/tests ]; then
+            python -m pytest api/tests -q
+          else
+            echo 'No api/tests directory present; compile check passed.'
+          fi
