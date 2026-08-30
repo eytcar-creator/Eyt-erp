@@ -125,11 +125,22 @@ def inspect_batch(batch_no: str, payload: InspectionInput, _=Depends(require_per
             if new_accepted + new_rejected > batch["planned_qty"]:
                 raise HTTPException(status_code=422, detail="inspection quantity exceeds planned quantity")
             next_status = "FAILED" if result == "FAIL" else ("PASSED" if result == "PASS" else "INSPECTION")
+            cur.execute("SELECT id FROM production_orders WHERE order_no=%s", (batch["production_order_no"],))
+            production_order = cur.fetchone()
+            if not production_order:
+                raise HTTPException(status_code=422, detail="production order not found for QC batch")
             cur.execute(
                 """INSERT INTO quality_inspections
-                (quality_batch_id, inspection_type, result, inspector, notes)
-                VALUES (%s,%s,%s,%s,%s) RETURNING *""",
-                (batch["id"], payload.inspection_type, result, payload.inspector, payload.notes),
+                (production_order_id, quality_batch_id, inspection_type, inspection_date,
+                 inspected_qty, accepted_qty, rejected_qty, result, inspector_name, inspector, notes)
+                VALUES (%s,%s,%s,CURRENT_TIMESTAMP,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING *""",
+                (
+                    production_order["id"], batch["id"], payload.inspection_type,
+                    payload.accepted_qty + payload.rejected_qty,
+                    payload.accepted_qty, payload.rejected_qty, result,
+                    payload.inspector, payload.inspector, payload.notes,
+                ),
             )
             inspection = cur.fetchone()
             cur.execute(
