@@ -40,8 +40,10 @@ jobs:
           cache: pip
       - name: Install dependencies
         run: pip install -r requirements.txt httpx
-      - name: Verify migration chain
+      - name: Verify SQL migration chain
         run: python scripts/verify_migration_chain.py
+      - name: Verify Alembic migration chain
+        run: python scripts/verify_alembic_chain.py
       - name: Initialize PostgreSQL test schema
         run: |
           PGPASSWORD=eyt_test psql -h localhost -U eyt_user -d eyt_erp_test -v ON_ERROR_STOP=1 -f database/migrations/001_production_core.sql
