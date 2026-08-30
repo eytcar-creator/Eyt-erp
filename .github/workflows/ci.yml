@@ -57,3 +57,43 @@ jobs:
           PGPASSWORD=eyt_test psql -h localhost -U eyt_user -d eyt_erp_test -v ON_ERROR_STOP=1 -f database/migrations/007_qc_release_traceability.sql
       - name: Run tests
         run: pytest -q
+
+  production-smoke:
+    name: Production Compose Smoke
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_DB: eyt_erp
+      POSTGRES_USER: eyt_user
+      POSTGRES_PASSWORD: eyt_smoke
+      DATABASE_URL: postgresql://eyt_user:eyt_smoke@db:5432/eyt_erp
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate production compose
+        run: docker compose -f docker-compose.production.yml config
+      - name: Build and start production stack
+        run: docker compose -f docker-compose.production.yml up -d --build
+      - name: Wait for readiness
+        run: |
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://localhost:8000/ready; then
+              echo
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "ERP readiness did not become healthy in time"
+          docker compose -f docker-compose.production.yml ps
+          docker compose -f docker-compose.production.yml logs --no-color api db
+          exit 1
+      - name: Run operational smoke test
+        run: BASE_URL=http://localhost:8000 python scripts/operational_smoke_test.py
+      - name: Show service status
+        if: always()
+        run: docker compose -f docker-compose.production.yml ps
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.production.yml logs --no-color api db
+      - name: Tear down production stack
+        if: always()
+        run: docker compose -f docker-compose.production.yml down -v
