@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>E.Y.T ERP | پنل عملیاتی</title>
+<style>
+:root{font-family:Tahoma,Arial,sans-serif;color:#17202a;background:#f4f6f8}*{box-sizing:border-box}body{margin:0}.top{background:#111827;color:#fff;padding:18px 24px;display:flex;justify-content:space-between;align-items:center}.brand{font-size:22px;font-weight:800}.status{font-size:13px;padding:7px 12px;border-radius:999px;background:#374151}.wrap{max-width:1200px;margin:24px auto;padding:0 16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}.card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:18px;box-shadow:0 2px 8px #0000000b}.k{font-size:13px;color:#6b7280}.v{font-size:28px;font-weight:800;margin-top:8px}.nav{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:18px}.nav a{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;text-decoration:none;color:#111827;font-weight:700}.nav a:hover{border-color:#9ca3af}.section{margin-top:24px}.muted{color:#6b7280;font-size:13px}.danger{color:#b91c1c}.ok{color:#047857}
+</style></head>
+<body>
+<header class="top"><div class="brand">E.Y.T ERP</div><div id="system" class="status">در حال بررسی...</div></header>
+<main class="wrap">
+<h1>پنل عملیاتی شرکت</h1><p class="muted">مرکز کنترل واحد برای محصول، انبار، تولید، کیفیت، فروش و مالی</p>
+<section class="grid" id="metrics"><div class="card"><div class="k">محصولات فعال</div><div class="v">—</div></div><div class="card"><div class="k">مشتریان فعال</div><div class="v">—</div></div><div class="card"><div class="k">موجودی کل</div><div class="v">—</div></div><div class="card"><div class="k">سفارش‌های باز</div><div class="v">—</div></div><div class="card"><div class="k">تولیدهای فعال</div><div class="v">—</div></div></section>
+<section class="section"><h2>ماژول‌ها</h2><div class="nav"><a href="/docs">مستندات API</a><a href="/redoc">Redoc</a><a href="/health">Health</a><a href="/ready">Readiness</a><a href="/api/v1/products">محصولات</a><a href="/api/v1/inventory">موجودی</a><a href="/api/v1/dashboard/summary">داشبورد API</a></div></section>
+<section class="section card"><h2>زنجیره عملیاتی E.Y.T</h2><p>Master Data → Procurement → Receiving → Inventory → BOM → Production → QC → Finished Goods → Sales → Receivables → Dashboard</p></section>
+</main>
+<script>
+async function load(){const s=document.getElementById('system');try{const h=await fetch('/health');s.textContent=h.ok?'سرویس فعال':'سرویس مشکل دارد';s.className='status '+(h.ok?'ok':'danger')}catch(e){s.textContent='سرویس در دسترس نیست';s.className='status danger'}try{const r=await fetch('/api/v1/dashboard/summary');if(!r.ok)return;const d=await r.json();const vals=[d.active_products,d.active_customers,d.total_units_on_hand,d.open_sales_orders,d.active_production_orders];document.querySelectorAll('#metrics .v').forEach((x,i)=>x.textContent=vals[i]??0)}catch(e){}}
+load();setInterval(load,30000);
+</script></body></html>

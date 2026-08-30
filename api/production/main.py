@@ -1,6 +1,8 @@
 import os
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 
 from .fastapi_app import app as base_app
 from .operation_api import router as operation_router
@@ -29,6 +31,12 @@ app.include_router(inventory_flow_router)
 app.include_router(product_master_router)
 app.include_router(purchase_receiving_router)
 app.include_router(qc_router)
+
+PORTAL = Path(__file__).resolve().parents[2] / "portal" / "index.html"
+
+@app.get("/", include_in_schema=False)
+def portal() -> FileResponse:
+    return FileResponse(PORTAL)
 
 @app.get("/health", tags=["system"])
 def health() -> dict[str, str]:
