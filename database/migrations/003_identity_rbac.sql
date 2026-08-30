@@ -52,10 +52,11 @@ CREATE TABLE IF NOT EXISTS eyt_audit_logs (
 
 INSERT INTO eyt_roles(name,description) VALUES ('CEO','Full internal ERP access') ON CONFLICT (name) DO NOTHING;
 INSERT INTO eyt_permissions(code) VALUES
- ('production.read'),('production.execute'),('qc.inspect'),('qc.release'),
+ ('production.read'),('production.execute'),('qc.inspect'),('qc.execute'),('qc.read'),('qc.release'),
  ('reporting.read'),('admin.users.manage'),('admin.roles.manage'),
  ('product.read'),('product.write'),('inventory.read'),('inventory.execute'),
- ('inventory.write'),('procurement.read')
+ ('inventory.write'),('procurement.read'),('procurement.write'),('procurement.receive'),
+ ('sales.read'),('sales.write'),('sales.fulfill'),('finance.read'),('finance.write')
 ON CONFLICT (code) DO NOTHING;
 INSERT INTO eyt_role_permissions(role_id,permission_id)
 SELECT r.id,p.id FROM eyt_roles r CROSS JOIN eyt_permissions p WHERE r.name='CEO'
