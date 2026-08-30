@@ -18,6 +18,12 @@ CREATE TABLE IF NOT EXISTS quality_batches (
     CHECK (status IN ('CREATED','INSPECTION','PASSED','FAILED','BLOCKED','RELEASED'))
 );
 
+ALTER TABLE quality_inspections
+    ADD COLUMN IF NOT EXISTS quality_batch_id BIGINT REFERENCES quality_batches(id) ON DELETE CASCADE;
+ALTER TABLE quality_inspections ADD COLUMN IF NOT EXISTS inspection_type VARCHAR(40);
+ALTER TABLE quality_inspections ADD COLUMN IF NOT EXISTS inspector VARCHAR(100);
+ALTER TABLE quality_inspections ADD COLUMN IF NOT EXISTS inspected_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+
 CREATE TABLE IF NOT EXISTS quality_defects (
     id BIGSERIAL PRIMARY KEY,
     quality_batch_id BIGINT NOT NULL REFERENCES quality_batches(id) ON DELETE CASCADE,
@@ -35,6 +41,7 @@ CREATE TABLE IF NOT EXISTS finished_goods_releases (
     product_code VARCHAR(100) NOT NULL REFERENCES products(product_code),
     warehouse_code VARCHAR(60) NOT NULL REFERENCES warehouses(code),
     quantity NUMERIC(18,6) NOT NULL CHECK (quantity > 0),
+    consumed_qty NUMERIC(18,6) NOT NULL DEFAULT 0 CHECK (consumed_qty >= 0 AND consumed_qty <= quantity),
     release_status VARCHAR(20) NOT NULL DEFAULT 'RELEASED',
     released_by VARCHAR(100) NOT NULL,
     released_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
