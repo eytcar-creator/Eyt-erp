@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Verify the Alembic migration chain is single-headed, gap-free, and ordered."""
+"""Verify the discovered Alembic migration segment is ordered and single-headed.
+
+The repository currently contains an Alembic extension segment beginning at
+0015; its predecessor (0014) is maintained outside this directory. The
+verifier therefore requires contiguous local numbering while allowing the
+first migration to point at an external predecessor.
+"""
 
 from __future__ import annotations
 
@@ -32,8 +38,8 @@ def verify(directory: Path) -> None:
         raise SystemExit("no numbered Alembic migrations found")
 
     numbers = [n for n, _ in items]
-    if numbers != list(range(1, len(numbers) + 1)):
-        raise SystemExit(f"Alembic filename chain is not contiguous: {numbers}")
+    if numbers != list(range(numbers[0], numbers[0] + len(numbers))):
+        raise SystemExit(f"Alembic local filename segment is not contiguous: {numbers}")
 
     revisions: dict[str, str | None] = {}
     for number, path in items:
@@ -41,23 +47,33 @@ def verify(directory: Path) -> None:
         revision = REV_RE.search(text)
         if not revision:
             raise SystemExit(f"missing revision id: {path}")
-        if revision.group(1) != f"{number:04d}":
-            raise SystemExit(f"filename/revision mismatch: {path.name} -> {revision.group(1)}")
+        revision_id = revision.group(1)
+        if revision_id != f"{number:04d}":
+            raise SystemExit(f"filename/revision mismatch: {path.name} -> {revision_id}")
+        if revision_id in revisions:
+            raise SystemExit(f"duplicate revision id: {revision_id}")
         down = DOWN_RE.search(text)
-        revisions[revision.group(1)] = down.group(1) if down else None
+        revisions[revision_id] = down.group(1) if down else None
 
-    expected_previous: str | None = None
+    first_revision = f"{numbers[0]:04d}"
+    first_parent = revisions[first_revision]
+    expected_previous = first_parent
+
     for number, _path in items:
         revision = f"{number:04d}"
         actual_previous = revisions[revision]
-        if actual_previous != expected_previous:
+        if revision != first_revision and actual_previous != expected_previous:
             raise SystemExit(
                 f"broken Alembic chain at {revision}: expected down_revision="
                 f"{expected_previous!r}, got {actual_previous!r}"
             )
         expected_previous = revision
 
-    print(f"Alembic migration chain OK: {len(items)} migrations, head={expected_previous}")
+    head = f"{numbers[-1]:04d}"
+    print(
+        f"Alembic migration chain OK: {len(items)} local migrations, "
+        f"segment={first_revision}..{head}, external_base={first_parent!r}"
+    )
 
 
 def main() -> None:
