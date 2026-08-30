@@ -14,6 +14,7 @@ from .commercial_api import router as commercial_router
 from .inventory_flow_api import router as inventory_flow_router
 from .product_master_api import router as product_master_router
 from .purchase_receiving_api import router as purchase_receiving_router
+from .qc_api import router as qc_router
 
 app = base_app or FastAPI(title="E.Y.T ERP API", version="0.9.0")
 app.include_router(auth_router)
@@ -27,6 +28,7 @@ app.include_router(commercial_router)
 app.include_router(inventory_flow_router)
 app.include_router(product_master_router)
 app.include_router(purchase_receiving_router)
+app.include_router(qc_router)
 
 @app.get("/health", tags=["system"])
 def health() -> dict[str, str]:
