@@ -110,9 +110,8 @@ def create_order(payload: SalesOrder, request: Request,
             ).fetchone()
             if not product:
                 raise HTTPException(422, f"Product not found or inactive: {line.productCode}")
-            unit_price = line.unitPrice
             unit_cost = product[1]
-            subtotal += line.quantity * unit_price
+            subtotal += line.quantity * line.unitPrice
             product_rows.append((product[0], line, unit_cost))
         subtotal = money(subtotal)
         if payload.prepayment > subtotal:
@@ -169,18 +168,28 @@ def issue_invoice(order_no: str, payload: InvoiceInput, request: Request,
             raise HTTPException(404, "Sales order not found")
         if order[2] not in ("CONFIRMED", "FULFILLED"):
             raise HTTPException(409, f"Cannot invoice order in status {order[2]}")
+        lines = conn.execute(
+            "SELECT product_id,quantity,unit_price,unit_cost FROM sales_order_items WHERE sales_order_id=%s ORDER BY id",
+            (order[0],),
+        ).fetchall()
         try:
-            invoice_id = conn.execute(
+            invoice = conn.execute(
                 """INSERT INTO invoices(invoice_no,sales_order_id,customer_id,subtotal,prepayment_amount,receivable_amount)
                    VALUES(%s,%s,%s,%s,%s,%s) RETURNING id,invoice_no,subtotal,prepayment_amount,receivable_amount,status""",
                 (payload.invoiceNo, order[0], order[1], order[3], order[4], order[3] - order[4]),
             ).fetchone()
+            for product_id, quantity, unit_price, unit_cost in lines:
+                conn.execute(
+                    """INSERT INTO invoice_items(invoice_id,product_id,quantity,unit_price,unit_cost)
+                       VALUES(%s,%s,%s,%s,%s)""",
+                    (invoice[0], product_id, quantity, unit_price, unit_cost),
+                )
             conn.commit()
         except psycopg.errors.UniqueViolation as exc:
             conn.rollback()
             raise HTTPException(409, "Invoice number already exists or order is already invoiced") from exc
-    audit(request, principal, "sales.invoice.issue", invoice_id[0], {"invoice_no": payload.invoiceNo, "order_no": order_no})
-    return dict(zip(["id","invoiceNo","subtotal","prepayment","receivable","status"], invoice_id))
+    audit(request, principal, "sales.invoice.issue", invoice[0], {"invoice_no": payload.invoiceNo, "order_no": order_no})
+    return dict(zip(["id","invoiceNo","subtotal","prepayment","receivable","status"], invoice))
 
 
 @router.post("/orders/{order_no}/fulfill")
@@ -202,7 +211,7 @@ def fulfill_order(order_no: str, request: Request,
                WHERE i.sales_order_id=%s ORDER BY p.product_code""",
             (order[0],),
         ).fetchall()
-        for product_id, product_code, quantity, unit_cost in lines:
+        for _, product_code, quantity, _unit_cost in lines:
             balance = conn.execute(
                 """SELECT COALESCE(SUM(CASE
                     WHEN transaction_type IN ('RECEIPT','TRANSFER_IN','RETURN','PRODUCTION_RECEIPT','ADJUSTMENT') THEN quantity
@@ -216,10 +225,8 @@ def fulfill_order(order_no: str, request: Request,
                    WHERE product_code=%s AND warehouse_code=%s AND status='RESERVED'""",
                 (product_code, order[2]),
             ).fetchone()[0]
-            available = balance - reserved
-            if available < quantity:
-                raise HTTPException(409, f"Insufficient available inventory for {product_code}: available={available} required={quantity}")
-
+            if balance - reserved < quantity:
+                raise HTTPException(409, f"Insufficient available inventory for {product_code}: available={balance-reserved} required={quantity}")
             released = conn.execute(
                 """SELECT COALESCE(SUM(quantity-consumed_qty),0)
                    FROM finished_goods_releases
@@ -287,10 +294,7 @@ def record_payment(payload: PaymentInput, request: Request,
         )
         new_receivable = invoice[2] - payload.amount
         new_status = "PAID" if new_receivable == 0 else "PARTIALLY_PAID"
-        conn.execute(
-            "UPDATE invoices SET receivable_amount=%s,status=%s WHERE id=%s",
-            (new_receivable, new_status, invoice[0]),
-        )
+        conn.execute("UPDATE invoices SET receivable_amount=%s,status=%s WHERE id=%s", (new_receivable, new_status, invoice[0]))
         conn.commit()
     audit(request, principal, "finance.payment.record", payment_id, {"invoice_no": payload.invoiceNo, "amount": str(payload.amount)})
     return {"paymentId": payment_id, "invoiceNo": payload.invoiceNo, "allocated": payload.amount, "remainingReceivable": new_receivable, "invoiceStatus": new_status}
@@ -312,7 +316,8 @@ def get_order(order_no: str, _=Depends(require_permission("sales.read"))):
             (order[0],),
         ).fetchall()
         invoice = conn.execute(
-            "SELECT invoice_no,subtotal,prepayment_amount,receivable_amount,status FROM invoices WHERE sales_order_id=%s",
+            """SELECT invoice_no,subtotal,prepayment_amount,receivable_amount,status
+               FROM invoices WHERE sales_order_id=%s""",
             (order[0],),
         ).fetchone()
     result = dict(zip(["id","orderNo","customerCode","customerName","warehouseCode","orderDate","status","subtotal","prepayment"], order))
