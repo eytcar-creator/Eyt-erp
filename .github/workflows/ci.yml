@@ -55,6 +55,7 @@ jobs:
           PGPASSWORD=eyt_test psql -h localhost -U eyt_user -d eyt_erp_test -v ON_ERROR_STOP=1 -f database/migrations/005_purchase_receiving.sql
           PGPASSWORD=eyt_test psql -h localhost -U eyt_user -d eyt_erp_test -v ON_ERROR_STOP=1 -f database/migrations/006_sales_receivables.sql
           PGPASSWORD=eyt_test psql -h localhost -U eyt_user -d eyt_erp_test -v ON_ERROR_STOP=1 -f database/migrations/007_qc_release_traceability.sql
+          PGPASSWORD=eyt_test psql -h localhost -U eyt_user -d eyt_erp_test -v ON_ERROR_STOP=1 -f database/migrations/008_invoice_payment_balance.sql
       - name: Run tests
         run: pytest -q
 
