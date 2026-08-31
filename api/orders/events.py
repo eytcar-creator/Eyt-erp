@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 
 @dataclass(frozen=True)
@@ -25,3 +25,8 @@ def order_confirmed_event(order_no: str, customer_id: str, representative_id: st
         order_no=order_no,
         occurred_at=datetime.now(timezone.utc).isoformat(),
     ).payload(customer_id=customer_id, representative_id=representative_id)
+
+
+def publish_event(event: dict[str, Any], publisher: Callable[[dict[str, Any]], None]) -> None:
+    """Publish an already-committed domain event to the automation adapter."""
+    publisher(event)
