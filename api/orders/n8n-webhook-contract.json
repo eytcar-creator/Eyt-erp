@@ -1,0 +1,19 @@
+{
+  "event": "order.confirmed",
+  "version": 1,
+  "source": "EYT_ORDER_CENTER",
+  "payload": {
+    "order_no": "EYT-ORD-YYYY-XXXXXX",
+    "customer_id": "uuid",
+    "representative_id": "uuid|null",
+    "status": "RESERVED",
+    "occurred_at": "ISO-8601"
+  },
+  "automation": [
+    "notify_sales",
+    "notify_customer",
+    "notify_representative",
+    "create_follow_up",
+    "update_crm"
+  ]
+}
