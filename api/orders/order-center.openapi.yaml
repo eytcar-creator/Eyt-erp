@@ -1,0 +1,90 @@
+openapi: 3.0.3
+info:
+  title: E.Y.T Order Center API
+  version: 1.0.0
+  description: Unified order intake for customers, representatives and sales channels.
+servers:
+  - url: /api/v1
+paths:
+  /orders:
+    post:
+      summary: Create a sales order
+      operationId: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '409':
+          description: Insufficient stock or duplicate request
+  /orders/{orderNo}:
+    get:
+      summary: Get order status
+      operationId: getOrder
+      parameters:
+        - in: path
+          name: orderNo
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+  /orders/{orderNo}/confirm:
+    post:
+      summary: Confirm order and reserve inventory
+      operationId: confirmOrder
+      parameters:
+        - in: path
+          name: orderNo
+          required: true
+          schema: {type: string}
+      responses:
+        '200': {description: Confirmed}
+        '409': {description: Credit or stock validation failed}
+components:
+  schemas:
+    CreateOrderRequest:
+      type: object
+      required: [customer_id, warehouse_code, channel, items]
+      properties:
+        customer_id: {type: string, format: uuid}
+        representative_id: {type: string, format: uuid, nullable: true}
+        warehouse_code: {type: string}
+        channel:
+          type: string
+          enum: [WEBSITE, WHATSAPP, PHONE, INSTAGRAM, SHOP, REPRESENTATIVE, OTHER]
+        notes: {type: string}
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [product_id, quantity]
+            properties:
+              product_id: {type: string, format: uuid}
+              quantity: {type: number, exclusiveMinimum: 0}
+              unit_price: {type: number, minimum: 0, nullable: true}
+    Order:
+      type: object
+      properties:
+        order_no: {type: string, example: EYT-ORD-1405-000001}
+        status:
+          type: string
+          enum: [DRAFT, PENDING_CONFIRMATION, CONFIRMED, RESERVED, PREPARING, READY_TO_SHIP, SHIPPED, DELIVERED, CANCELLED, RETURNED]
+        customer_id: {type: string, format: uuid}
+        representative_id: {type: string, format: uuid, nullable: true}
+        channel: {type: string}
+        total: {type: number}
+        reserved: {type: boolean}
