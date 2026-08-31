@@ -17,6 +17,7 @@ from .inventory_flow_api import router as inventory_flow_router
 from .product_master_api import router as product_master_router
 from .purchase_receiving_api import router as purchase_receiving_router
 from .qc_api import router as qc_router
+from ..orders.fastapi_router import router as order_router
 
 app = base_app or FastAPI(title="E.Y.T ERP API", version="0.9.0")
 app.include_router(auth_router)
@@ -31,6 +32,7 @@ app.include_router(inventory_flow_router)
 app.include_router(product_master_router)
 app.include_router(purchase_receiving_router)
 app.include_router(qc_router)
+app.include_router(order_router)
 
 PORTAL = Path(__file__).resolve().parents[2] / "portal" / "index.html"
 
