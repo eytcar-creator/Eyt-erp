@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>E.Y.T | سفارش نماینده</title>
+<style>body{font-family:system-ui,sans-serif;background:#f5f7fa;margin:0;color:#18212b}.wrap{max-width:1100px;margin:auto;padding:24px}.card{background:#fff;border:1px solid #e1e6eb;border-radius:14px;padding:18px;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}input,select,button{width:100%;box-sizing:border-box;padding:12px;border:1px solid #ccd4dc;border-radius:9px;font:inherit}button{cursor:pointer;background:#18212b;color:#fff}.muted{color:#66727d}.total{font-size:24px;font-weight:700}.status{padding:8px 12px;border-radius:20px;background:#eef2f5;display:inline-block}</style>
+</head>
+<body><main class="wrap">
+<h1>E.Y.T Order Center</h1><p class="muted">ثبت سفارش نماینده</p>
+<section class="card"><h2>اطلاعات سفارش</h2><div class="grid">
+<label>مشتری<input id="customer" required placeholder="شناسه مشتری"></label>
+<label>انبار<input id="warehouse" value="MAIN"></label>
+<label>کانال<select id="channel"><option>REPRESENTATIVE</option><option>PHONE</option><option>WHATSAPP</option><option>SHOP</option></select></label>
+<label>نماینده<input id="representative" placeholder="شناسه نماینده"></label>
+</div></section>
+<section class="card"><h2>اقلام</h2><div id="items"></div><button type="button" onclick="addItem()">+ افزودن کالا</button></section>
+<section class="card"><button onclick="submitOrder()">ثبت سفارش</button><p id="result" class="status">آماده ثبت</p></section>
+</main><script>
+const items=document.getElementById('items');
+function addItem(){const row=document.createElement('div');row.className='grid';row.innerHTML='<input class="pid" placeholder="SKU / Product ID" required><input class="qty" type="number" min="1" value="1"><input class="price" type="number" min="0" placeholder="قیمت واحد"><button type="button" onclick="this.parentElement.remove()">حذف</button>';items.appendChild(row)}
+addItem();
+async function submitOrder(){const result=document.getElementById('result');const rows=[...items.children];const payload={customer_id:document.getElementById('customer').value,warehouse_code:document.getElementById('warehouse').value,channel:document.getElementById('channel').value,representative_id:document.getElementById('representative').value||null,items:rows.map(r=>({product_id:r.querySelector('.pid').value,quantity:r.querySelector('.qty').value,unit_price:r.querySelector('.price').value||null}))};const key=crypto.randomUUID();try{const res=await fetch('/api/v1/orders',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':key},body:JSON.stringify(payload)});const data=await res.json();if(!res.ok)throw new Error(data.detail||'خطا');result.textContent='سفارش '+(data.order_no||'ثبت شد');}catch(e){result.textContent='خطا: '+e.message}}
+</script></body></html>
