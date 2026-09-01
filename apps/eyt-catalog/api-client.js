@@ -15,6 +15,7 @@ export async function createLiveOrder({ customerId, warehouseCode = 'MAIN', item
   if (!customerId) throw new Error('شناسه مشتری الزامی است');
   const response = await fetch(`${EYT_API_BASE}/orders`, {
     method: 'POST',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...authHeaders(),
@@ -33,6 +34,7 @@ export async function createLiveOrder({ customerId, warehouseCode = 'MAIN', item
 
 export async function getLiveOrder(orderNo) {
   const response = await fetch(`${EYT_API_BASE}/orders/${encodeURIComponent(orderNo)}`, {
+    credentials: 'include',
     headers: { Accept: 'application/json', ...authHeaders() }
   });
   return parseResponse(response);
