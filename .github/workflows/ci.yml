@@ -85,8 +85,12 @@ jobs:
           done
           echo "ERP readiness did not become healthy in time"
           docker compose -f docker-compose.production.yml ps
-          docker compose -f docker-compose.production.yml logs --no-color api db
+          docker compose -f docker-compose.production.yml logs --no-color api db catalog
           exit 1
+      - name: Check customer catalog portal
+        run: curl --fail --silent --show-error http://localhost:8080/ | grep -q "پرتال مشتری E.Y.T"
+      - name: Check portal API proxy
+        run: curl --fail --silent --show-error http://localhost:8080/api/health
       - name: Run operational smoke test
         run: BASE_URL=http://localhost:8000 python scripts/operational_smoke_test.py
       - name: Show service status
@@ -94,7 +98,7 @@ jobs:
         run: docker compose -f docker-compose.production.yml ps
       - name: Show logs on failure
         if: failure()
-        run: docker compose -f docker-compose.production.yml logs --no-color api db
+        run: docker compose -f docker-compose.production.yml logs --no-color api db catalog
       - name: Tear down production stack
         if: always()
         run: docker compose -f docker-compose.production.yml down -v
