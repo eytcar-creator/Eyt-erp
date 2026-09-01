@@ -1,0 +1,11 @@
+{
+  "name": "E.Y.T Catalog & B2B Portal",
+  "short_name": "E.Y.T",
+  "lang": "fa",
+  "dir": "rtl",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f7f9",
+  "theme_color": "#991b1b",
+  "description": "کاتالوگ، سفارش‌گیری B2B و پیگیری سفارش E.Y.T"
+}
