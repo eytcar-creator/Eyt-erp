@@ -1,25 +1,23 @@
-from fastapi.testclient import TestClient
+import pytest
+from fastapi import HTTPException
 
-from api.production.main import app
-
-
-client = TestClient(app)
+from api.production.main import health, readiness
 
 
 def test_health_endpoint() -> None:
-    response = client.get("/health")
-
-    assert response.status_code == 200
-    assert response.json() == {
+    assert health() == {
         "status": "ok",
         "service": "eyt-erp",
         "version": "0.9.0",
     }
 
 
-def test_ready_without_database_url() -> None:
+def test_ready_without_database_url(monkeypatch: pytest.MonkeyPatch) -> None:
     # The readiness endpoint must fail closed when DATABASE_URL is absent.
-    response = client.get("/ready")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
 
-    assert response.status_code == 503
-    assert response.json()["detail"] == "DATABASE_URL is not configured"
+    with pytest.raises(HTTPException) as exc_info:
+        readiness()
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail == "DATABASE_URL is not configured"
