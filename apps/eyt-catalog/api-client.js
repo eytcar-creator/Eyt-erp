@@ -1,11 +1,23 @@
 const EYT_API_BASE = '/api/v1';
 
+function authHeaders() {
+  const token = window.EYT_CONFIG?.accessToken;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function parseResponse(response) {
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.detail || `خطای API: ${response.status}`);
+  return body;
+}
+
 export async function createLiveOrder({ customerId, warehouseCode = 'MAIN', items, notes = '', idempotencyKey }) {
   if (!customerId) throw new Error('شناسه مشتری الزامی است');
   const response = await fetch(`${EYT_API_BASE}/orders`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...authHeaders(),
       ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {})
     },
     body: JSON.stringify({
@@ -16,16 +28,14 @@ export async function createLiveOrder({ customerId, warehouseCode = 'MAIN', item
       items
     })
   });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.detail || `خطای API: ${response.status}`);
-  return body;
+  return parseResponse(response);
 }
 
 export async function getLiveOrder(orderNo) {
-  const response = await fetch(`${EYT_API_BASE}/orders/${encodeURIComponent(orderNo)}`, { headers: { Accept: 'application/json' } });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.detail || `خطای API: ${response.status}`);
-  return body;
+  const response = await fetch(`${EYT_API_BASE}/orders/${encodeURIComponent(orderNo)}`, {
+    headers: { Accept: 'application/json', ...authHeaders() }
+  });
+  return parseResponse(response);
 }
 
 export function orderStage(status) {
