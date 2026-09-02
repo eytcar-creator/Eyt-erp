@@ -1,0 +1,74 @@
+name: E.Y.T Catalog Static Package
+
+on:
+  push:
+    paths:
+      - 'apps/eyt-catalog/**'
+      - '.github/workflows/eyt-catalog-package.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare deployment package
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist/eyt-catalog
+          mkdir -p dist/eyt-catalog
+          cp apps/eyt-catalog/index.html dist/eyt-catalog/
+          cp apps/eyt-catalog/api-client.js dist/eyt-catalog/
+          cp apps/eyt-catalog/manifest.webmanifest dist/eyt-catalog/
+          cat > dist/eyt-catalog/config.js <<'EOF'
+          window.EYT_CONFIG = {
+            apiBase: 'https://api.eytparts.ir/api/v1',
+            customerId: null,
+            warehouseCode: 'MAIN',
+            productIds: {},
+            accessToken: null
+          };
+          EOF
+          test -s dist/eyt-catalog/index.html
+          test -s dist/eyt-catalog/api-client.js
+          test -s dist/eyt-catalog/manifest.webmanifest
+          test -s dist/eyt-catalog/config.js
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('dist/eyt-catalog/index.html')
+          s = p.read_text(encoding='utf-8')
+          needle = '<script>window.EYT_CONFIG=window.EYT_CONFIG||{customerId:null,warehouseCode:\'MAIN\',productIds:{},accessToken:null};</script>'
+          replacement = '<script src="./config.js"></script>\n<script>window.EYT_CONFIG=window.EYT_CONFIG||{customerId:null,warehouseCode:\'MAIN\',productIds:{},accessToken:null};</script>'
+          if needle not in s:
+              raise SystemExit('Expected EYT_CONFIG bootstrap not found')
+          p.write_text(s.replace(needle, replacement, 1), encoding='utf-8')
+          PY
+
+      - name: Validate package
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'https://api.eytparts.ir/api/v1' dist/eyt-catalog/config.js
+          grep -q 'src="./config.js"' dist/eyt-catalog/index.html
+          grep -q "from './api-client.js'" dist/eyt-catalog/index.html
+
+      - name: Create ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          zip -r ../eyt-catalog-shared-hosting.zip eyt-catalog >/dev/null
+
+      - name: Upload deployment artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: eyt-catalog-shared-hosting
+          path: eyt-catalog-shared-hosting.zip
+          if-no-files-found: error
+          retention-days: 14
