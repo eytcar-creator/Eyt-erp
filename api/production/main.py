@@ -15,11 +15,12 @@ from .finance_router import router as finance_router
 from .commercial_api import router as commercial_router
 from .inventory_flow_api import router as inventory_flow_router
 from .product_master_api import router as product_master_router
+from .vehicle_master_api import router as vehicle_master_router
 from .purchase_receiving_api import router as purchase_receiving_router
 from .qc_api import router as qc_router
 from ..orders.fastapi_router import router as order_router
 
-app = base_app or FastAPI(title="E.Y.T ERP API", version="0.9.0")
+app = base_app or FastAPI(title="E.Y.T ERP API", version="0.9.1")
 app.include_router(auth_router)
 app.include_router(operation_router)
 app.include_router(costing_router)
@@ -30,6 +31,7 @@ app.include_router(finance_router)
 app.include_router(commercial_router)
 app.include_router(inventory_flow_router)
 app.include_router(product_master_router)
+app.include_router(vehicle_master_router)
 app.include_router(purchase_receiving_router)
 app.include_router(qc_router)
 app.include_router(order_router)
@@ -42,7 +44,7 @@ def portal() -> FileResponse:
 
 @app.get("/health", tags=["system"])
 def health() -> dict[str, str]:
-    return {"status": "ok", "service": "eyt-erp", "version": "0.9.0"}
+    return {"status": "ok", "service": "eyt-erp", "version": "0.9.1"}
 
 @app.get("/ready", tags=["system"])
 def readiness() -> dict[str, str]:
@@ -57,4 +59,4 @@ def readiness() -> dict[str, str]:
                 cur.fetchone()
     except Exception as exc:
         raise HTTPException(status_code=503, detail="database is not ready") from exc
-    return {"status": "ready", "service": "eyt-erp", "version": "0.9.0"}
+    return {"status": "ready", "service": "eyt-erp", "version": "0.9.1"}
