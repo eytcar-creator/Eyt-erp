@@ -8,7 +8,7 @@ def test_health_endpoint() -> None:
     assert health() == {
         "status": "ok",
         "service": "eyt-erp",
-        "version": "0.9.0",
+        "version": "0.9.1",
     }
 
 
