@@ -66,18 +66,23 @@ ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS fulfillment_status VARCHAR(30)
 ALTER TABLE sales_order_items ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(20,2) NOT NULL DEFAULT 0 CHECK (discount_amount >= 0);
 ALTER TABLE sales_order_items ADD COLUMN IF NOT EXISTS line_total NUMERIC(20,2) NOT NULL DEFAULT 0 CHECK (line_total >= 0);
 
-CREATE TABLE IF NOT EXISTS inventory_reservations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    sales_order_id UUID NOT NULL REFERENCES sales_orders(id) ON DELETE CASCADE,
-    sales_order_item_id UUID NOT NULL REFERENCES sales_order_items(id) ON DELETE CASCADE,
-    product_id UUID NOT NULL REFERENCES products(id),
-    warehouse_code VARCHAR(60) NOT NULL REFERENCES warehouses(code),
-    quantity NUMERIC(18,6) NOT NULL CHECK (quantity > 0),
-    status VARCHAR(20) NOT NULL DEFAULT 'RESERVED',
-    reserved_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    released_at TIMESTAMPTZ,
-    CHECK (status IN ('RESERVED','RELEASED','FULFILLED'))
-);
+-- Migration 004 already created inventory_reservations with a legacy shape.
+-- Extend that table in place instead of relying on CREATE TABLE IF NOT EXISTS,
+-- so a clean database and an upgraded database converge to the same schema.
+ALTER TABLE inventory_reservations ADD COLUMN IF NOT EXISTS sales_order_id UUID REFERENCES sales_orders(id) ON DELETE CASCADE;
+ALTER TABLE inventory_reservations ADD COLUMN IF NOT EXISTS sales_order_item_id UUID REFERENCES sales_order_items(id) ON DELETE CASCADE;
+ALTER TABLE inventory_reservations ADD COLUMN IF NOT EXISTS product_id UUID REFERENCES products(id);
+
+UPDATE inventory_reservations r
+SET product_id = p.id
+FROM products p
+WHERE r.product_id IS NULL AND r.product_code = p.product_code;
+
+-- The legacy status constraint does not include FULFILLED, which is required by
+-- the unified reservation lifecycle. Replace it with the superset constraint.
+ALTER TABLE inventory_reservations DROP CONSTRAINT IF EXISTS inventory_reservations_status_check;
+ALTER TABLE inventory_reservations ADD CONSTRAINT inventory_reservations_status_check
+    CHECK (status IN ('RESERVED','RELEASED','CONSUMED','CANCELLED','FULFILLED'));
 
 CREATE INDEX IF NOT EXISTS idx_representatives_territory ON representatives(territory,is_active);
 CREATE INDEX IF NOT EXISTS idx_price_items_product ON price_list_items(product_id);
