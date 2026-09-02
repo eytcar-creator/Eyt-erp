@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from uuid import UUID
 
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -9,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from .auth import audit, require_permission
 
-router = APIRouter(prefix="/api", tags=["E.Y.T master data"])
+router = APIRouter(prefix="/api/v1", tags=["E.Y.T master data"])
 
 
 def _connect():
@@ -64,9 +63,7 @@ def catalog_vehicles(q: str | None = Query(default=None, max_length=100)):
                           generation, platform, displacement, model_year
                    FROM vehicle_master
                    WHERE is_active AND (brand_name ILIKE %s OR model_name ILIKE %s OR vehicle_id ILIKE %s)
-                   ORDER BY brand_name, model_name""",
-                (term, term, term),
-            )
+                   ORDER BY brand_name, model_name""", (term, term, term))
         else:
             cur.execute(
                 """SELECT vehicle_id, brand_id, brand_name, model_id, model_name, body_type, market,
@@ -80,7 +77,6 @@ def catalog_vehicles(q: str | None = Query(default=None, max_length=100)):
 
 @router.get("/catalog/vehicles/{vehicle_id}/products")
 def catalog_vehicle_products(vehicle_id: str):
-    """Public catalog products for a vehicle, limited to confirmed active fitments."""
     with _connect() as conn, conn.cursor() as cur:
         cur.execute("SELECT id FROM vehicle_master WHERE vehicle_id=%s AND is_active", (vehicle_id,))
         vehicle = cur.fetchone()
@@ -89,14 +85,11 @@ def catalog_vehicle_products(vehicle_id: str):
         cur.execute(
             """SELECT p.product_code,p.sku,p.name_fa,p.name_en,p.product_type,p.unit,p.barcode,p.oem_code,
                       p.specification,c.code,c.name_fa,pc.position,pc.side,pc.year_from,pc.year_to
-               FROM product_vehicle_compatibility pc
-               JOIN products p ON p.id=pc.product_id
+               FROM product_vehicle_compatibility pc JOIN products p ON p.id=pc.product_id
                LEFT JOIN product_categories c ON c.id=p.category_id
                WHERE pc.vehicle_id=%s AND pc.is_active AND pc.fitment_status='CONFIRMED'
                  AND pc.fitment_confidence='CONFIRMED' AND p.is_active
-               ORDER BY c.code,p.name_fa""",
-            (vehicle[0],),
-        )
+               ORDER BY c.code,p.name_fa""", (vehicle[0],))
         keys = ["productCode", "sku", "nameFa", "nameEn", "productType", "unit", "barcode", "oemCode",
                 "specification", "categoryCode", "categoryNameFa", "position", "side", "yearFrom", "yearTo"]
         return [dict(zip(keys, row)) for row in cur.fetchall()]
@@ -104,7 +97,6 @@ def catalog_vehicle_products(vehicle_id: str):
 
 @router.get("/catalog/vehicles/{vehicle_id}/kits")
 def catalog_vehicle_kits(vehicle_id: str):
-    """Public catalog kits whose parent product is confirmed for the vehicle."""
     with _connect() as conn, conn.cursor() as cur:
         cur.execute("SELECT id FROM vehicle_master WHERE vehicle_id=%s AND is_active", (vehicle_id,))
         vehicle = cur.fetchone()
@@ -112,14 +104,10 @@ def catalog_vehicle_kits(vehicle_id: str):
             raise HTTPException(404, "Vehicle not found")
         cur.execute(
             """SELECT DISTINCT p.product_code,p.sku,p.name_fa,p.name_en,p.product_type
-               FROM product_vehicle_compatibility pc
-               JOIN products p ON p.id=pc.product_id
+               FROM product_vehicle_compatibility pc JOIN products p ON p.id=pc.product_id
                WHERE pc.vehicle_id=%s AND pc.is_active AND pc.fitment_status='CONFIRMED'
-                 AND pc.fitment_confidence='CONFIRMED' AND p.is_active
-                 AND p.product_type IN ('KIT','PACK')
-               ORDER BY p.name_fa""",
-            (vehicle[0],),
-        )
+                 AND pc.fitment_confidence='CONFIRMED' AND p.is_active AND p.product_type IN ('KIT','PACK')
+               ORDER BY p.name_fa""", (vehicle[0],))
         keys = ["productCode", "sku", "nameFa", "nameEn", "productType"]
         return [dict(zip(keys, row)) for row in cur.fetchall()]
 
@@ -132,14 +120,11 @@ def catalog_product_bom(product_code: str):
         if parent is None:
             raise HTTPException(404, "Product not found")
         cur.execute(
-            """SELECT c.product_code,c.sku,c.name_fa,c.name_en,b.quantity,b.unit,b.required,
-                      b.loss_percent,b.assembly_sequence,b.qc_required
-               FROM kit_bom_master b
-               JOIN products c ON c.id=b.component_product_id
+            """SELECT c.product_code,c.sku,c.name_fa,c.name_en,b.quantity,b.unit,b.required,b.loss_percent,
+                      b.assembly_sequence,b.qc_required
+               FROM kit_bom_master b JOIN products c ON c.id=b.component_product_id
                WHERE b.parent_product_id=%s AND b.is_active AND c.is_active
-               ORDER BY b.assembly_sequence NULLS LAST,c.product_code""",
-            (parent[0],),
-        )
+               ORDER BY b.assembly_sequence NULLS LAST,c.product_code""", (parent[0],))
         keys = ["productCode", "sku", "nameFa", "nameEn", "quantity", "unit", "required",
                 "lossPercent", "assemblySequence", "qcRequired"]
         return [dict(zip(keys, row)) for row in cur.fetchall()]
@@ -156,8 +141,7 @@ def create_vehicle(payload: VehicleInput, request: Request,
                    VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
                 (payload.vehicleId,payload.brandId,payload.brandName,payload.modelId,payload.modelName,
                  payload.generation,payload.platform,payload.bodyType,payload.market,payload.engineCode,
-                 payload.displacement,payload.transmissionType,payload.driveType,payload.modelYear,payload.notes),
-            )
+                 payload.displacement,payload.transmissionType,payload.driveType,payload.modelYear,payload.notes))
         except psycopg.errors.UniqueViolation as exc:
             raise HTTPException(409, "Vehicle ID or model ID already exists") from exc
         vehicle_uuid = cur.fetchone()[0]
@@ -172,6 +156,8 @@ def create_compatibility(payload: CompatibilityInput, request: Request,
         raise HTTPException(422, "yearTo must be greater than or equal to yearFrom")
     if payload.fitmentStatus not in {"CONFIRMED", "PROBABLE", "UNDER_REVIEW", "REJECTED"}:
         raise HTTPException(422, "Invalid fitment status")
+    if payload.fitmentConfidence not in {"CONFIRMED", "PROBABLE", "UNDER_REVIEW", "REJECTED"}:
+        raise HTTPException(422, "Invalid fitment confidence")
     with _connect() as conn, conn.cursor() as cur:
         cur.execute("SELECT id FROM products WHERE product_code=%s AND is_active", (payload.productCode,))
         product = cur.fetchone()
@@ -187,8 +173,7 @@ def create_compatibility(payload: CompatibilityInput, request: Request,
                 VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
                 (product[0],vehicle[0],payload.fitmentStatus,payload.position,payload.side,payload.engineCode,
                  payload.engineVolume,payload.transmission,payload.yearFrom,payload.yearTo,payload.oemReference,
-                 payload.fitmentConfidence,payload.notes),
-            )
+                 payload.fitmentConfidence,payload.notes))
         except psycopg.errors.UniqueViolation as exc:
             raise HTTPException(409, "Compatibility already exists") from exc
         compatibility_id = cur.fetchone()[0]
