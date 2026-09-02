@@ -1,4 +1,4 @@
-const EYT_API_BASE = '/api/v1';
+const EYT_API_BASE = window.EYT_CONFIG?.apiBase || '/api/v1';
 
 function authHeaders() {
   const token = window.EYT_CONFIG?.accessToken;
