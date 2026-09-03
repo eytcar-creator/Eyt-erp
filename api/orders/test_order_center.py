@@ -6,8 +6,9 @@ from .order_center import CreateOrder, OrderChannel, OrderCenter, OrderLine, Ord
 
 
 class FakeOrders:
-    def __init__(self):
+    def __init__(self, inventory):
         self.data = {}
+        self.inventory = inventory
 
     def create(self, order):
         value = {"status": OrderStatus.PENDING_CONFIRMATION.value, "items": [
@@ -24,6 +25,10 @@ class FakeOrders:
         self.data[order_no]["status"] = OrderStatus.RESERVED.value
         return {"order_no": order_no, **self.data[order_no]}
 
+    def confirm_with_controls(self, *, order_no, customer_id, warehouse_code, payment_type, items):
+        self.inventory.reserve(warehouse_code, items)
+        return self.confirm(order_no)
+
 
 class FakeInventory:
     def __init__(self):
@@ -34,7 +39,8 @@ class FakeInventory:
 
 
 def service():
-    orders, inventory = FakeOrders(), FakeInventory()
+    inventory = FakeInventory()
+    orders = FakeOrders(inventory)
     return OrderCenter(orders, inventory), orders, inventory
 
 
