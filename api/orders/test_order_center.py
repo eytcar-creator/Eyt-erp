@@ -14,7 +14,7 @@ class FakeOrders:
         value = {"status": OrderStatus.PENDING_CONFIRMATION.value, "items": [
             {"product_id": x.product_id, "quantity": str(x.quantity), "unit_price": str(x.unit_price)}
             for x in order.items
-        ], "warehouse_code": order.warehouse_code}
+        ], "warehouse_code": order.warehouse_code, "customer_id": order.customer_id}
         self.data["EYT-ORD-TEST"] = value
         return {"order_no": "EYT-ORD-TEST", **value}
 
