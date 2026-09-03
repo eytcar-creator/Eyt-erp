@@ -5,11 +5,7 @@ from typing import Any
 
 
 class PostgresOrderRepository:
-    """SQL adapter contract for the E.Y.T Order Center.
-
-    The caller supplies a DB connection/transaction factory. SQL is kept here so
-    HTTP handlers never manipulate persistence directly.
-    """
+    """SQL adapter with a single transaction boundary for order confirmation."""
 
     def __init__(self, connection_factory):
         self.connection_factory = connection_factory
@@ -20,13 +16,14 @@ class PostgresOrderRepository:
                 cur.execute("""
                     INSERT INTO sales_orders
                       (customer_id, representative_id, warehouse_code, channel,
-                       status, idempotency_key, notes, created_at)
-                    VALUES (%s,%s,%s,%s,'PENDING_CONFIRMATION',%s,%s,NOW())
+                       status, idempotency_key, notes, payment_type, created_at)
+                    VALUES (%s,%s,%s,%s,'PENDING_CONFIRMATION',%s,%s,%s,NOW())
                     RETURNING order_no, customer_id, representative_id,
-                              warehouse_code, channel, status
+                              warehouse_code, channel, status, payment_type
                 """, (order.customer_id, order.representative_id,
                        order.warehouse_code, order.channel.value,
-                       order.idempotency_key, order.notes))
+                       order.idempotency_key, order.notes,
+                       order.payment_type.value))
                 row = cur.fetchone()
                 if not row:
                     raise RuntimeError("order creation failed")
@@ -41,14 +38,15 @@ class PostgresOrderRepository:
                 conn.commit()
                 return {"order_no": row[0], "customer_id": row[1],
                         "representative_id": row[2], "warehouse_code": row[3],
-                        "channel": row[4], "status": row[5]}
+                        "channel": row[4], "status": row[5],
+                        "payment_type": row[6]}
 
     def get(self, order_no: str) -> dict[str, Any] | None:
         with self.connection_factory() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT order_no, customer_id, representative_id,
-                           warehouse_code, channel, status
+                           warehouse_code, channel, status, payment_type
                     FROM sales_orders WHERE order_no=%s
                 """, (order_no,))
                 row = cur.fetchone()
@@ -63,19 +61,101 @@ class PostgresOrderRepository:
                          for r in cur.fetchall()]
                 return {"order_no": row[0], "customer_id": row[1],
                         "representative_id": row[2], "warehouse_code": row[3],
-                        "channel": row[4], "status": row[5], "items": items}
+                        "channel": row[4], "status": row[5],
+                        "payment_type": row[6], "items": items}
 
     def confirm(self, order_no: str) -> dict[str, Any]:
-        """Confirm and reserve in the caller-owned transaction boundary."""
         with self.connection_factory() as conn:
             with conn.cursor() as cur:
-                self.confirm_in_transaction(cur, order_no)
+                result = self.confirm_in_transaction(cur, order_no)
                 conn.commit()
-                return {"order_no": order_no, "status": "RESERVED", "reserved": True}
+                return result
+
+    def confirm_with_controls(self, order_no: str, customer_id: str,
+                              warehouse_code: str, payment_type: str,
+                              items: tuple) -> dict[str, Any]:
+        """Credit gate + stock reservation + cost snapshot + state/audit atomically."""
+        with self.connection_factory() as conn:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT order_no, customer_id, status, payment_type
+                        FROM sales_orders
+                        WHERE order_no=%s
+                        FOR UPDATE
+                    """, (order_no,))
+                    order_row = cur.fetchone()
+                    if not order_row:
+                        raise KeyError(order_no)
+                    if order_row[2] not in ('PENDING_CONFIRMATION','CONFIRMED'):
+                        raise ValueError("order is not confirmable")
+
+                    if payment_type == 'CREDIT':
+                        cur.execute("""
+                            SELECT credit_limit, risk_level, manual_hold
+                            FROM customer_credit_profiles
+                            WHERE customer_id=%s
+                            FOR UPDATE
+                        """, (customer_id,))
+                        credit = cur.fetchone()
+                        if not credit:
+                            raise ValueError("credit profile not found")
+                        cur.execute("""
+                            SELECT COALESCE(SUM(outstanding),0)
+                            FROM receivables WHERE customer_id=%s
+                        """, (customer_id,))
+                        outstanding = Decimal(str(cur.fetchone()[0]))
+                        credit_limit = Decimal(str(credit[0]))
+                        overdue = Decimal('0')
+                        cur.execute("""
+                            SELECT COALESCE(SUM(outstanding),0)
+                            FROM receivables
+                            WHERE customer_id=%s AND days_overdue > 0
+                        """, (customer_id,))
+                        overdue = Decimal(str(cur.fetchone()[0]))
+                        requested = sum((line.quantity * line.unit_price for line in items), Decimal('0'))
+                        available = max(credit_limit - outstanding, Decimal('0'))
+                        status = 'OK'
+                        if credit[2] or credit[1] == 'BLOCKED':
+                            status = 'BLOCKED'
+                        elif outstanding > credit_limit:
+                            status = 'CREDIT_HOLD'
+                        elif any(Decimal(str(x)) > 0 for x in [overdue]) and overdue > 0:
+                            status = 'REVIEW' if overdue < requested else 'HIGH_RISK'
+                        allowed = status == 'OK' and available >= requested
+                        reason = 'OK' if allowed else (status if status != 'OK' else 'CREDIT_LIMIT_EXCEEDED')
+                        cur.execute("""
+                            INSERT INTO order_credit_checks
+                              (order_no, customer_id, requested_amount, allowed,
+                               credit_status, available_credit, reason)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s)
+                        """, (order_no, customer_id, requested, allowed,
+                               status, available, reason))
+                        if not allowed:
+                            raise ValueError(f"credit check failed: {reason}")
+
+                    PostgresInventoryGateway.reserve_in_transaction(cur, warehouse_code, items)
+
+                    for line in items:
+                        cur.execute("""
+                            UPDATE sales_order_items i
+                            SET cost_snapshot = COALESCE(i.cost_snapshot, p.standard_cost, 0),
+                                contribution = i.quantity * (i.unit_price - COALESCE(i.cost_snapshot, p.standard_cost, 0))
+                            FROM products p
+                            WHERE i.order_no=%s AND i.product_id=%s
+                              AND i.product_id=p.product_uuid
+                              AND i.cost_snapshot IS NULL
+                        """, (order_no, line.product_id))
+
+                    result = self.confirm_in_transaction(cur, order_no)
+                    conn.commit()
+                    return result
+            except Exception:
+                conn.rollback()
+                raise
 
     @staticmethod
     def confirm_in_transaction(cur, order_no: str) -> dict[str, Any]:
-        """Change order state and audit within an existing transaction."""
         cur.execute("""
             UPDATE sales_orders
             SET status='RESERVED', confirmed_at=NOW(), updated_at=NOW()
@@ -99,7 +179,6 @@ class PostgresInventoryGateway:
         self.connection_factory = connection_factory
 
     def reserve(self, warehouse_code: str, items) -> None:
-        """Legacy standalone reservation path. Prefer reserve_in_transaction."""
         with self.connection_factory() as conn:
             with conn.cursor() as cur:
                 self.reserve_in_transaction(cur, warehouse_code, items)
@@ -107,7 +186,6 @@ class PostgresInventoryGateway:
 
     @staticmethod
     def reserve_in_transaction(cur, warehouse_code: str, items) -> None:
-        """Reserve inventory using the same DB transaction as order confirmation."""
         for line in items:
             cur.execute("""
                 SELECT available_qty FROM inventory_stock
