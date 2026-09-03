@@ -37,7 +37,8 @@ def test_red_when_margin_is_below_floor() -> None:
     )
 
     assert quote.status == "RED"
-    assert quote.profit < Decimal("0")
+    assert quote.profit == Decimal("5.00")
+    assert quote.margin_pct < Decimal("20")
     assert quote.maximum_additional_discount_pct == Decimal("0")
 
 
