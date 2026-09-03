@@ -66,30 +66,15 @@ ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS fulfillment_status VARCHAR(30)
 ALTER TABLE sales_order_items ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(20,2) NOT NULL DEFAULT 0 CHECK (discount_amount >= 0);
 ALTER TABLE sales_order_items ADD COLUMN IF NOT EXISTS line_total NUMERIC(20,2) NOT NULL DEFAULT 0 CHECK (line_total >= 0);
 
-CREATE TABLE IF NOT EXISTS inventory_reservations (
-    id BIGSERIAL PRIMARY KEY,
-    product_code VARCHAR(100) NOT NULL REFERENCES products(product_code),
-    warehouse_code VARCHAR(60) NOT NULL REFERENCES warehouses(code),
-    reference_type VARCHAR(50) NOT NULL,
-    reference_id VARCHAR(100) NOT NULL,
-    quantity NUMERIC(18,6) NOT NULL CHECK (quantity > 0),
-    status VARCHAR(20) NOT NULL DEFAULT 'RESERVED',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CHECK (status IN ('RESERVED','RELEASED','CONSUMED','CANCELLED'))
-);
-
--- Migration 004 owns the reservation table. Extend that legacy shape instead of
--- attempting to recreate it with incompatible UUID/order columns.
-ALTER TABLE inventory_reservations
-    ADD COLUMN IF NOT EXISTS sales_order_id UUID REFERENCES sales_orders(id) ON DELETE CASCADE;
-ALTER TABLE inventory_reservations
-    ADD COLUMN IF NOT EXISTS sales_order_item_id UUID REFERENCES sales_order_items(id) ON DELETE CASCADE;
+-- inventory_reservations already exists in Migration 004 with the canonical
+-- product_code/warehouse_code/reference_id model. Do not redefine it here.
+-- Order-specific reservations are represented by reference_type/reference_id.
 
 CREATE INDEX IF NOT EXISTS idx_representatives_territory ON representatives(territory,is_active);
 CREATE INDEX IF NOT EXISTS idx_price_items_product ON price_list_items(product_id);
 CREATE INDEX IF NOT EXISTS idx_orders_channel ON sales_orders(channel_id,order_date);
 CREATE INDEX IF NOT EXISTS idx_orders_rep ON sales_orders(representative_id,order_date);
-CREATE INDEX IF NOT EXISTS idx_reservations_order ON inventory_reservations(sales_order_id,status);
+CREATE INDEX IF NOT EXISTS idx_reservations_reference ON inventory_reservations(reference_type,reference_id,status);
 CREATE INDEX IF NOT EXISTS idx_reservations_product_warehouse ON inventory_reservations(product_code,warehouse_code,status);
 
 UPDATE sales_orders SET total_amount = subtotal - discount_amount WHERE total_amount = 0;
