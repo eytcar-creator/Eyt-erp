@@ -29,6 +29,11 @@ class OrderStatus(str, Enum):
     RETURNED = "RETURNED"
 
 
+class PaymentType(str, Enum):
+    CASH = "CASH"
+    CREDIT = "CREDIT"
+
+
 @dataclass(frozen=True)
 class OrderLine:
     product_id: str
@@ -45,6 +50,7 @@ class CreateOrder:
     representative_id: str | None = None
     idempotency_key: str | None = None
     notes: str | None = None
+    payment_type: PaymentType = PaymentType.CASH
 
 
 class OrderRepository(Protocol):
@@ -58,7 +64,7 @@ class InventoryGateway(Protocol):
 
 
 class OrderCenter:
-    """Application service. Persistence/HTTP adapters stay outside this domain layer."""
+    """Application service. PostgreSQL adapter owns the atomic transaction boundary."""
 
     def __init__(self, orders: OrderRepository, inventory: InventoryGateway):
         self.orders = orders
@@ -75,8 +81,6 @@ class OrderCenter:
         return self.orders.create(command)
 
     def confirm(self, order_no: str) -> dict:
-        # The concrete PostgreSQL adapter must execute validation, reservation,
-        # status transition and audit event in one database transaction.
         order = self.orders.get(order_no)
         if not order:
             raise KeyError(order_no)
@@ -85,6 +89,7 @@ class OrderCenter:
             OrderStatus.CONFIRMED.value,
         }:
             raise ValueError("order is not confirmable")
+
         items = tuple(
             OrderLine(
                 product_id=i["product_id"],
@@ -93,5 +98,18 @@ class OrderCenter:
             )
             for i in order["items"]
         )
+
+        # PostgreSQL adapter performs credit gate, reservation, cost snapshot,
+        # status transition and audit in one transaction when available.
+        atomic_confirm = getattr(self.orders, "confirm_with_controls", None)
+        if atomic_confirm is not None:
+            return atomic_confirm(
+                order_no=order_no,
+                customer_id=order["customer_id"],
+                warehouse_code=order["warehouse_code"],
+                payment_type=order.get("payment_type", PaymentType.CASH.value),
+                items=items,
+            )
+
         self.inventory.reserve(order["warehouse_code"], items)
         return self.orders.confirm(order_no)
