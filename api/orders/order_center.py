@@ -57,6 +57,14 @@ class OrderRepository(Protocol):
     def create(self, order: CreateOrder) -> dict: ...
     def get(self, order_no: str) -> dict | None: ...
     def confirm(self, order_no: str) -> dict: ...
+    def confirm_with_controls(
+        self,
+        order_no: str,
+        customer_id: str,
+        warehouse_code: str,
+        payment_type: str,
+        items: tuple[OrderLine, ...],
+    ) -> dict: ...
 
 
 class InventoryGateway(Protocol):
@@ -64,7 +72,7 @@ class InventoryGateway(Protocol):
 
 
 class OrderCenter:
-    """Application service. PostgreSQL adapter owns the atomic transaction boundary."""
+    """Application service. Confirmation is atomic in the persistence adapter."""
 
     def __init__(self, orders: OrderRepository, inventory: InventoryGateway):
         self.orders = orders
@@ -99,17 +107,13 @@ class OrderCenter:
             for i in order["items"]
         )
 
-        # PostgreSQL adapter performs credit gate, reservation, cost snapshot,
-        # status transition and audit in one transaction when available.
-        atomic_confirm = getattr(self.orders, "confirm_with_controls", None)
-        if atomic_confirm is not None:
-            return atomic_confirm(
-                order_no=order_no,
-                customer_id=order["customer_id"],
-                warehouse_code=order["warehouse_code"],
-                payment_type=order.get("payment_type", PaymentType.CASH.value),
-                items=items,
-            )
-
-        self.inventory.reserve(order["warehouse_code"], items)
-        return self.orders.confirm(order_no)
+        # Never use the legacy two-transaction reserve+confirm sequence.
+        # The PostgreSQL adapter owns one transaction for credit gate,
+        # stock locks/reservation, cost snapshot, state transition and audit.
+        return self.orders.confirm_with_controls(
+            order_no=order_no,
+            customer_id=order["customer_id"],
+            warehouse_code=order["warehouse_code"],
+            payment_type=order.get("payment_type", PaymentType.CASH.value),
+            items=items,
+        )
