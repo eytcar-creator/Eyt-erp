@@ -9,6 +9,7 @@ from .operation_api import router as operation_router
 from .auth import router as auth_router
 from .costing_api import router as costing_router
 from .dashboard_api import router as dashboard_router
+from .control_tower_api import router as control_tower_router
 from .sales_api import router as sales_router
 from .procurement_api import router as procurement_router
 from .finance_router import router as finance_router
@@ -26,6 +27,7 @@ app.include_router(auth_router)
 app.include_router(operation_router)
 app.include_router(costing_router)
 app.include_router(dashboard_router)
+app.include_router(control_tower_router)
 app.include_router(sales_router)
 app.include_router(procurement_router)
 app.include_router(finance_router)
