@@ -38,6 +38,10 @@ jobs:
         run: |
           if [ -d api/tests ]; then
             python -m pytest api/tests -q
-          else
-            echo 'No api/tests directory present; compile check passed.'
+          fi
+          if [ -d tests ]; then
+            python -m pytest tests -q
+          fi
+          if [ ! -d api/tests ] && [ ! -d tests ]; then
+            echo 'No test directories present; compile check passed.'
           fi
