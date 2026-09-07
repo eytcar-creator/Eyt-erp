@@ -52,6 +52,15 @@ CREATE TABLE IF NOT EXISTS customer_credit_profiles (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Older Order Center migration 011 created this table without payment terms.
+-- Add the field explicitly so CREATE TABLE IF NOT EXISTS remains compatible.
+ALTER TABLE customer_credit_profiles
+    ADD COLUMN IF NOT EXISTS payment_terms_days INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE customer_credit_profiles
+    ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE customer_credit_profiles
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
 CREATE TABLE IF NOT EXISTS order_credit_checks (
     id BIGSERIAL PRIMARY KEY,
     order_no VARCHAR(60) NOT NULL,
@@ -63,6 +72,13 @@ CREATE TABLE IF NOT EXISTS order_credit_checks (
     checked_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Migration 011 has a reason column used by the runtime adapter. Keep the
+-- canonical contract compatible with both the older and newer definitions.
+ALTER TABLE order_credit_checks
+    ADD COLUMN IF NOT EXISTS reason VARCHAR(120);
+ALTER TABLE order_credit_checks
+    ADD COLUMN IF NOT EXISTS checked_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
 CREATE TABLE IF NOT EXISTS order_audit_log (
     id BIGSERIAL PRIMARY KEY,
     order_no VARCHAR(60) NOT NULL,
@@ -71,6 +87,11 @@ CREATE TABLE IF NOT EXISTS order_audit_log (
     details JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE order_audit_log
+    ADD COLUMN IF NOT EXISTS actor_id TEXT;
+ALTER TABLE order_audit_log
+    ADD COLUMN IF NOT EXISTS details JSONB;
 
 -- Canonical finance schema uses invoices.id, sales_orders.order_no and
 -- payment_allocations. Build the receivables view from those real tables.
