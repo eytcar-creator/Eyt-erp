@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
+from uuid import uuid4
 
 
 class PostgresOrderRepository:
@@ -9,6 +11,12 @@ class PostgresOrderRepository:
 
     def __init__(self, connection_factory):
         self.connection_factory = connection_factory
+
+    @staticmethod
+    def _new_order_no() -> str:
+        # Application-generated because the canonical sales_orders baseline
+        # requires order_no and does not guarantee a database default.
+        return f"EYT-{datetime.now(timezone.utc):%Y%m%d}-{uuid4().hex[:10].upper()}"
 
     def create(self, order) -> dict[str, Any]:
         with self.connection_factory() as conn:
@@ -19,13 +27,14 @@ class PostgresOrderRepository:
                         existing = cur.fetchone()
                         if existing:
                             return self.get(existing[0]) or {"order_no": existing[0]}
+                    order_no = self._new_order_no()
                     cur.execute("""
                         INSERT INTO sales_orders
-                          (customer_id, representative_id, warehouse_code, channel, status,
+                          (order_no, customer_id, representative_id, warehouse_code, channel, status,
                            idempotency_key, notes, payment_type, created_at)
-                        VALUES (%s,%s,%s,%s,'PENDING_CONFIRMATION',%s,%s,%s,NOW())
+                        VALUES (%s,%s,%s,%s,%s,'PENDING_CONFIRMATION',%s,%s,%s,NOW())
                         RETURNING id, order_no, customer_id, representative_id, warehouse_code, channel, status, payment_type
-                    """, (order.customer_id, order.representative_id, order.warehouse_code,
+                    """, (order_no, order.customer_id, order.representative_id, order.warehouse_code,
                           order.channel.value, order.idempotency_key, order.notes, order.payment_type.value))
                     row = cur.fetchone()
                     for line in order.items:
