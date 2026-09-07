@@ -19,6 +19,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_sales_orders_idempotency_key
 ALTER TABLE sales_order_items ADD COLUMN IF NOT EXISTS cost_snapshot NUMERIC(18,6);
 ALTER TABLE sales_order_items ADD COLUMN IF NOT EXISTS contribution NUMERIC(20,6);
 
+-- Migration 004 is the canonical reservation model. Add the later
+-- document/reference fields without recreating the table.
+ALTER TABLE inventory_reservations ADD COLUMN IF NOT EXISTS document_no VARCHAR(100);
+ALTER TABLE inventory_reservations ALTER COLUMN document_no SET DEFAULT 'LEGACY';
+UPDATE inventory_reservations SET document_no = COALESCE(document_no, reference_id, 'LEGACY-' || id::text);
+ALTER TABLE inventory_reservations ALTER COLUMN document_no SET NOT NULL;
+ALTER TABLE inventory_reservations DROP CONSTRAINT IF EXISTS inventory_reservations_status_check;
+ALTER TABLE inventory_reservations ADD CONSTRAINT inventory_reservations_status_check
+  CHECK (status IN ('RESERVED','CONSUMED','RELEASED','CANCELLED'));
+
 -- Credit control snapshot used during atomic confirmation.
 CREATE TABLE IF NOT EXISTS customer_credit_profiles (
   customer_id UUID PRIMARY KEY REFERENCES customers(id) ON DELETE CASCADE,
