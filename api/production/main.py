@@ -19,7 +19,9 @@ from .vehicle_master_api import router as vehicle_master_router
 from .purchase_receiving_api import router as purchase_receiving_router
 from .qc_api import router as qc_router
 from .profit_api import router as profit_router
-from ..orders.fastapi_router import router as order_router
+from ..orders.fastapi_router import router as order_router, configure_order_center
+from ..orders.order_center import OrderCenter
+from ..orders.postgres_adapter import PostgresOrderRepository, PostgresInventoryGateway
 
 app = base_app or FastAPI(title="E.Y.T ERP API", version="0.9.1")
 app.include_router(auth_router)
@@ -37,6 +39,23 @@ app.include_router(purchase_receiving_router)
 app.include_router(qc_router)
 app.include_router(profit_router)
 app.include_router(order_router)
+
+
+def _configure_order_center() -> None:
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        return
+    import psycopg
+
+    def connection_factory():
+        return psycopg.connect(database_url)
+
+    orders = PostgresOrderRepository(connection_factory)
+    inventory = PostgresInventoryGateway(connection_factory)
+    configure_order_center(OrderCenter(orders, inventory))
+
+
+_configure_order_center()
 
 PORTAL = Path(__file__).resolve().parents[2] / "portal" / "index.html"
 
