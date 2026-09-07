@@ -4,6 +4,8 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+-- These columns already exist in the canonical 004 migration; IF NOT EXISTS
+-- keeps this contract safe against older development databases.
 ALTER TABLE products ADD COLUMN IF NOT EXISTS product_code VARCHAR(100);
 ALTER TABLE products ADD COLUMN IF NOT EXISTS purchase_price NUMERIC(18,6) NOT NULL DEFAULT 0;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_products_product_code
@@ -21,7 +23,7 @@ CREATE TABLE IF NOT EXISTS representatives (
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS representative_id UUID;
+ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS representative_id UUID REFERENCES representatives(id);
 ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS channel VARCHAR(40);
 ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS payment_type VARCHAR(40);
 ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(200);
@@ -41,7 +43,7 @@ ALTER TABLE inventory_reservations ADD COLUMN IF NOT EXISTS quantity NUMERIC(18,
 ALTER TABLE inventory_reservations ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'RESERVED';
 
 CREATE TABLE IF NOT EXISTS customer_credit_profiles (
-    customer_id UUID PRIMARY KEY,
+    customer_id UUID PRIMARY KEY REFERENCES customers(id) ON DELETE CASCADE,
     credit_limit NUMERIC(18,2) NOT NULL DEFAULT 0 CHECK (credit_limit >= 0),
     payment_terms_days INTEGER NOT NULL DEFAULT 0 CHECK (payment_terms_days >= 0),
     risk_level VARCHAR(20) NOT NULL DEFAULT 'LOW',
@@ -70,21 +72,35 @@ CREATE TABLE IF NOT EXISTS order_audit_log (
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Compatibility view: financial SQL migrations define receivables as a view.
--- Ensure the required columns are exposed by the canonical financial view.
+-- Canonical finance schema uses invoices.id, sales_orders.order_no and
+-- payment_allocations. Build the receivables view from those real tables.
+-- Due date is derived from the customer's configured payment terms because
+-- the canonical invoice table does not store a separate due_date column.
 DO $$
 BEGIN
-    IF to_regclass('public.invoices') IS NOT NULL THEN
+    IF to_regclass('public.invoices') IS NOT NULL
+       AND to_regclass('public.payment_allocations') IS NOT NULL
+       AND to_regclass('public.payments') IS NOT NULL THEN
         EXECUTE 'CREATE OR REPLACE VIEW receivables AS
-        SELECT i.invoice_id, i.order_no, i.customer_id, i.invoice_date, i.due_date,
-               i.net_amount AS invoice_amount,
-               COALESCE(SUM(CASE WHEN p.status = ''POSTED'' THEN p.amount ELSE 0 END),0) AS collected,
-               i.net_amount - COALESCE(SUM(CASE WHEN p.status = ''POSTED'' THEN p.amount ELSE 0 END),0) AS outstanding,
-               GREATEST(0, CURRENT_DATE - i.due_date) AS days_overdue
+        SELECT i.id AS invoice_id,
+               so.order_no,
+               i.customer_id,
+               i.invoice_date,
+               (i.invoice_date + COALESCE(ccp.payment_terms_days, 0))::date AS due_date,
+               i.receivable_amount AS invoice_amount,
+               COALESCE(pa.collected, 0) AS collected,
+               GREATEST(i.receivable_amount - COALESCE(pa.collected, 0), 0) AS outstanding,
+               GREATEST(0, CURRENT_DATE - (i.invoice_date + COALESCE(ccp.payment_terms_days, 0))::date) AS days_overdue
         FROM invoices i
-        LEFT JOIN payments p ON p.invoice_id = i.invoice_id
-        WHERE i.status <> ''VOID''
-        GROUP BY i.invoice_id';
+        JOIN sales_orders so ON so.id = i.sales_order_id
+        LEFT JOIN customer_credit_profiles ccp ON ccp.customer_id = i.customer_id
+        LEFT JOIN (
+            SELECT p.invoice_id,
+                   SUM(p.amount) AS collected
+            FROM payment_allocations p
+            GROUP BY p.invoice_id
+        ) pa ON pa.invoice_id = i.id
+        WHERE i.status <> ''VOID''';
     END IF;
 END $$;
 
