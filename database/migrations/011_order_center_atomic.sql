@@ -2,6 +2,15 @@
 -- PostgreSQL / idempotent
 BEGIN;
 
+-- Representatives must exist before sales_orders can reference them.
+CREATE TABLE IF NOT EXISTS representatives (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  representative_code VARCHAR(60) NOT NULL UNIQUE,
+  name VARCHAR(200) NOT NULL,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Extend the canonical sales order model used by the Order Center.
 ALTER TABLE sales_orders DROP CONSTRAINT IF EXISTS sales_orders_status_check;
 ALTER TABLE sales_orders ADD CONSTRAINT sales_orders_status_check
