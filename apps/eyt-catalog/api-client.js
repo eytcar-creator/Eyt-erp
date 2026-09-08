@@ -51,6 +51,22 @@ export async function customerLogout() {
   return result;
 }
 
+export async function customerOrders(limit = 50) {
+  if (!window.EYT_CONFIG?.accessToken) throw new Error('ابتدا وارد حساب مشتری شوید');
+  const response = await fetch(`${EYT_API_BASE}/customer-portal/orders?limit=${encodeURIComponent(limit)}`, {
+    credentials: 'include', headers: { Accept: 'application/json', ...authHeaders() }
+  });
+  return parseResponse(response);
+}
+
+export async function customerOrder(orderNo) {
+  if (!window.EYT_CONFIG?.accessToken) throw new Error('ابتدا وارد حساب مشتری شوید');
+  const response = await fetch(`${EYT_API_BASE}/customer-portal/orders/${encodeURIComponent(orderNo)}`, {
+    credentials: 'include', headers: { Accept: 'application/json', ...authHeaders() }
+  });
+  return parseResponse(response);
+}
+
 export async function createLiveOrder({ customerId, warehouseCode = 'MAIN', items, notes = '', idempotencyKey }) {
   const effectiveCustomerId = customerId || window.EYT_CONFIG?.customerId;
   if (!effectiveCustomerId) throw new Error('ابتدا وارد حساب مشتری شوید');
@@ -64,10 +80,8 @@ export async function createLiveOrder({ customerId, warehouseCode = 'MAIN', item
 }
 
 export async function getLiveOrder(orderNo) {
-  const response = await fetch(`${EYT_API_BASE}/orders/${encodeURIComponent(orderNo)}`, {
-    credentials: 'include', headers: { Accept: 'application/json', ...authHeaders() }
-  });
-  return parseResponse(response);
+  if (window.EYT_CONFIG?.accessToken) return customerOrder(orderNo);
+  throw new Error('برای پیگیری سفارش، ابتدا وارد حساب مشتری شوید');
 }
 
 export function orderStage(status) {
