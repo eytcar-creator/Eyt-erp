@@ -175,6 +175,21 @@ def release_finished_goods(batch_no: str, payload: ReleaseInput, _=Depends(requi
             cur.execute("SELECT 1 FROM finished_goods_releases WHERE quality_batch_id=%s", (batch["id"],))
             if cur.fetchone():
                 raise HTTPException(status_code=409, detail="finished goods already released for batch")
+
+            # The QC release is the gate that creates real finished-goods stock.
+            # Keep it in the canonical inventory_transactions ledger, atomically
+            # with the QC release record, so a successful release can never exist
+            # without the corresponding stock receipt.
+            cur.execute("""INSERT INTO inventory_transactions
+                (document_no, warehouse_code, product_code, quantity, unit,
+                 transaction_type, reference_type, reference_id)
+                VALUES (%s,%s,%s,%s,'PCS','PRODUCTION_RECEIPT',%s,%s)
+                RETURNING id, created_at""",
+                (f"FG-{batch_no}", payload.warehouse_code, batch["product_code"],
+                 payload.quantity, "quality_batch", batch_no),
+            )
+            inventory_tx = cur.fetchone()
+
             cur.execute(
                 """INSERT INTO finished_goods_releases
                 (quality_batch_id, product_code, warehouse_code, quantity, released_by)
@@ -193,7 +208,7 @@ def release_finished_goods(batch_no: str, payload: ReleaseInput, _=Depends(requi
                 (batch_no, batch["product_code"], batch["production_order_no"], str(release["id"]), payload.released_by),
             )
             conn.commit()
-            return release
+            return {"release": release, "inventoryTransaction": inventory_tx}
 
 
 @router.post("/batches/{batch_no}/trace")
