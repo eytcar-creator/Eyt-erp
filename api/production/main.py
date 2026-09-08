@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 
 from .fastapi_app import app as base_app
 from .operation_api import router as operation_router
+from .production_control_api import router as production_control_router
 from .auth import router as auth_router
 from .costing_api import router as costing_router
 from .dashboard_api import router as dashboard_router
@@ -23,8 +24,9 @@ from ..orders.fastapi_router import router as order_router, configure_order_cent
 from ..orders.order_center import OrderCenter
 from ..orders.postgres_adapter import PostgresOrderRepository, PostgresInventoryGateway
 
-app = base_app or FastAPI(title="E.Y.T ERP API", version="0.9.1")
+app = base_app or FastAPI(title="E.Y.T ERP API", version="0.9.2")
 app.include_router(auth_router)
+app.include_router(production_control_router)
 app.include_router(operation_router)
 app.include_router(costing_router)
 app.include_router(dashboard_router)
@@ -40,23 +42,18 @@ app.include_router(qc_router)
 app.include_router(profit_router)
 app.include_router(order_router)
 
-
 def _configure_order_center() -> None:
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
         return
     import psycopg
-
     def connection_factory():
         return psycopg.connect(database_url)
-
     orders = PostgresOrderRepository(connection_factory)
     inventory = PostgresInventoryGateway(connection_factory)
     configure_order_center(OrderCenter(orders, inventory))
 
-
 _configure_order_center()
-
 PORTAL = Path(__file__).resolve().parents[2] / "portal" / "index.html"
 
 @app.get("/", include_in_schema=False)
@@ -65,7 +62,7 @@ def portal() -> FileResponse:
 
 @app.get("/health", tags=["system"])
 def health() -> dict[str, str]:
-    return {"status": "ok", "service": "eyt-erp", "version": "0.9.1"}
+    return {"status": "ok", "service": "eyt-erp", "version": "0.9.2"}
 
 @app.get("/ready", tags=["system"])
 def readiness() -> dict[str, str]:
@@ -80,4 +77,4 @@ def readiness() -> dict[str, str]:
                 cur.fetchone()
     except Exception as exc:
         raise HTTPException(status_code=503, detail="database is not ready") from exc
-    return {"status": "ready", "service": "eyt-erp", "version": "0.9.1"}
+    return {"status": "ready", "service": "eyt-erp", "version": "0.9.2"}
