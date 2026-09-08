@@ -51,6 +51,16 @@ export async function customerLogout() {
   return result;
 }
 
+export async function customerPrices({ productId, limit = 200 } = {}) {
+  if (!window.EYT_CONFIG?.accessToken) throw new Error('ابتدا وارد حساب مشتری شوید');
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (productId) query.set('product_id', productId);
+  const response = await fetch(`${EYT_API_BASE}/customer-portal/prices?${query}`, {
+    credentials: 'include', headers: { Accept: 'application/json', ...authHeaders() }
+  });
+  return parseResponse(response);
+}
+
 export async function customerOrders(limit = 50) {
   if (!window.EYT_CONFIG?.accessToken) throw new Error('ابتدا وارد حساب مشتری شوید');
   const response = await fetch(`${EYT_API_BASE}/customer-portal/orders?limit=${encodeURIComponent(limit)}`, {
@@ -80,12 +90,11 @@ export async function createLiveOrder({ customerId, warehouseCode = 'MAIN', item
 }
 
 export async function getLiveOrder(orderNo) {
-  if (window.EYT_CONFIG?.accessToken) return customerOrder(orderNo);
-  throw new Error('برای پیگیری سفارش، ابتدا وارد حساب مشتری شوید');
+  return customerOrder(orderNo);
 }
 
 export function orderStage(status) {
-  const map = { DRAFT: 0, PENDING_CONFIRMATION: 1, CONFIRMED: 1, RESERVED: 2, PREPARING: 3, READY_TO_SHIP: 5, SHIPPED: 6, DELIVERED: 7, CANCELLED: 0, RETURNED: 0 };
+  const map = { DRAFT: 0, PENDING_CONFIRMATION: 1, CONFIRMED: 1, RESERVED: 2, PREPARING: 3, READY_TO_SHIP: 5, SHIPPED: 6, DELIVERED: 7, FULFILLED: 7, CANCELLED: 0, RETURNED: 0 };
   return map[status] ?? 0;
 }
 
@@ -133,7 +142,7 @@ function openLogin() {
 function addAuthStyles() {
   if (document.getElementById('eytAuthStyles')) return;
   const style = document.createElement('style'); style.id = 'eytAuthStyles';
-  style.textContent = `#eytCustomerAuth{display:flex;align-items:center;gap:7px}#eytCustomerAuth button{border:0;background:#991b1b;color:#fff;border-radius:8px;padding:8px 11px;cursor:pointer;font-weight:700}.eyt-auth-user{font-size:12px;color:#fff;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.eyt-auth-user+button{background:#374151!important}.eyt-close{position:absolute;left:12px;top:10px;background:#e5e7eb!important;color:#111!important;font-size:20px}.eyt-login-box{position:relative;background:#fff;width:min(420px,92vw);padding:24px;border-radius:16px;box-shadow:0 15px 60px #0004}.eyt-login-box h2{margin-top:0}.eyt-login-box label{display:block;margin:12px 0 5px;font-size:12px;color:#475569}.eyt-login-box input{width:100%;padding:11px;border:1px solid #d1d5db;border-radius:8px}.eyt-login-submit{width:100%;margin-top:16px;border:0;background:#991b1b;color:#fff;padding:11px;border-radius:8px;font-weight:700}.eyt-login-box p{font-size:12px;color:#64748b}.eyt-login-box #eytLoginError{color:#991b1b;font-size:12px;margin-top:10px}.eyt-login-box~*{}.eyt-login-box form{display:block}#eytLoginModal{position:fixed;inset:0;background:#0008;display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px}`;
+  style.textContent = `#eytCustomerAuth{display:flex;align-items:center;gap:7px}#eytCustomerAuth button{border:0;background:#991b1b;color:#fff;border-radius:8px;padding:8px 11px;cursor:pointer;font-weight:700}.eyt-auth-user{font-size:12px;color:#fff;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.eyt-auth-user+button{background:#374151!important}.eyt-close{position:absolute;left:12px;top:10px;background:#e5e7eb!important;color:#111!important;font-size:20px}.eyt-login-box{position:relative;background:#fff;width:min(420px,92vw);padding:24px;border-radius:16px;box-shadow:0 15px 60px #0004}.eyt-login-box h2{margin-top:0}.eyt-login-box label{display:block;margin:12px 0 5px;font-size:12px;color:#475569}.eyt-login-box input{width:100%;padding:11px;border:1px solid #d1d5db;border-radius:8px}.eyt-login-submit{width:100%;margin-top:16px;border:0;background:#991b1b;color:#fff;padding:11px;border-radius:8px;font-weight:700}.eyt-login-box p{font-size:12px;color:#64748b}.eyt-login-box #eytLoginError{color:#991b1b;font-size:12px;margin-top:10px}.eyt-login-box form{display:block}#eytLoginModal{position:fixed;inset:0;background:#0008;display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px}`;
   document.head.appendChild(style);
 }
 
