@@ -86,8 +86,7 @@ def require_customer_session(request: Request) -> dict:
 def me(request: Request):
     session = require_customer_session(request)
     with _connect() as conn, conn.cursor() as cur:
-        cur.execute("""SELECT c.name, c.phone, c.email
-                       FROM customers c WHERE c.id=%s""", (session["customerId"],))
+        cur.execute("SELECT c.name, c.phone, c.email FROM customers c WHERE c.id=%s", (session["customerId"],))
         row = cur.fetchone()
     return {**session, "customerName": row[0] if row else None, "phone": row[1] if row else None,
             "email": row[2] if row else None}
@@ -99,8 +98,8 @@ def logout(request: Request):
     if not auth.startswith("Bearer "):
         return {"status": "logged_out"}
     with _connect() as conn, conn.cursor() as cur:
-        cur.execute("UPDATE customer_account_sessions SET revoked_at=CURRENT_TIMESTAMP
-                     WHERE token_hash=%s AND revoked_at IS NULL", (_hash_token(auth[7:].strip()),))
+        cur.execute("""UPDATE customer_account_sessions SET revoked_at=CURRENT_TIMESTAMP
+                       WHERE token_hash=%s AND revoked_at IS NULL""", (_hash_token(auth[7:].strip()),))
         conn.commit()
     return {"status": "logged_out"}
 
