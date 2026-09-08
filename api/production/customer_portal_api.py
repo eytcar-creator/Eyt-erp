@@ -4,6 +4,7 @@ import hashlib
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 import psycopg
 from fastapi import APIRouter, HTTPException, Request
@@ -102,6 +103,40 @@ def logout(request: Request):
                        WHERE token_hash=%s AND revoked_at IS NULL""", (_hash_token(auth[7:].strip()),))
         conn.commit()
     return {"status": "logged_out"}
+
+
+@router.get("/prices")
+def customer_prices(request: Request, product_id: str | None = None, limit: int = 200):
+    """Return the authenticated customer's effective prices only; never accepts a customer_id from the client."""
+    session = require_customer_session(request)
+    limit = max(1, min(limit, 500))
+    with _connect() as conn, conn.cursor() as cur:
+        params: list[object] = [session["customerId"]]
+        product_clause = ""
+        if product_id:
+            product_clause = " AND pli.product_id=%s"
+            params.append(product_id)
+        params.append(limit)
+        cur.execute(f"""SELECT pli.product_id, p.product_code, p.name_fa,
+                              pli.min_quantity, pli.unit_price,
+                              pl.code, pl.name
+                       FROM customers c
+                       JOIN price_lists pl ON pl.id=c.default_price_list_id
+                       JOIN price_list_items pli ON pli.price_list_id=pl.id
+                       JOIN products p ON p.id=pli.product_id
+                       WHERE c.id=%s AND pl.active=TRUE AND pli.active=TRUE
+                         AND (pl.valid_to IS NULL OR pl.valid_to>CURRENT_TIMESTAMP)
+                         AND (pli.valid_to IS NULL OR pli.valid_to>CURRENT_TIMESTAMP)
+                         AND pli.valid_from<=CURRENT_TIMESTAMP
+                         AND p.is_active=TRUE{product_clause}
+                       ORDER BY p.product_code, pli.min_quantity DESC, pli.valid_from DESC
+                       LIMIT %s""", params)
+        rows = cur.fetchall()
+    return [{
+        "productId": str(r[0]), "productCode": r[1], "productName": r[2],
+        "minQuantity": Decimal(str(r[3])), "unitPrice": Decimal(str(r[4])),
+        "priceListCode": r[5], "priceListName": r[6]
+    } for r in rows]
 
 
 @router.get("/orders")
