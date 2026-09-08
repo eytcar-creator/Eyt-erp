@@ -16,8 +16,6 @@ router = APIRouter(prefix="/api/v1/orders", tags=["Order Center"])
 class ItemIn(BaseModel):
     product_id: str
     quantity: Decimal = Field(gt=0)
-    # Optional for trusted internal callers. When omitted/zero, the canonical
-    # product sale price is resolved server-side from Master Data.
     unit_price: Decimal | None = Field(default=None, ge=0)
 
 
@@ -39,12 +37,7 @@ def configure_order_center(service: OrderCenter) -> None:
 
 
 def _resolve_prices(items: list[ItemIn]) -> list[ItemIn]:
-    """Fill missing prices from the canonical products.sale_price field.
-
-    The browser must never be able to create a live sales order with a silent
-    zero price. Customer-specific price lists can replace this resolver later,
-    while the Order Center contract remains unchanged.
-    """
+    """Resolve omitted/zero prices from canonical Master Data."""
     unresolved = [i.product_id for i in items if i.unit_price is None or i.unit_price <= 0]
     if not unresolved:
         return items
@@ -53,7 +46,7 @@ def _resolve_prices(items: list[ItemIn]) -> list[ItemIn]:
         raise HTTPException(status_code=503, detail="DATABASE_URL is not configured")
     with psycopg.connect(database_url) as conn, conn.cursor() as cur:
         cur.execute(
-            "SELECT id, sale_price, is_active FROM products WHERE id = ANY(%s)",
+            "SELECT id, sale_price, is_active FROM products WHERE id = ANY(%s::uuid[])",
             (unresolved,),
         )
         rows = {str(row[0]): row for row in cur.fetchall()}
