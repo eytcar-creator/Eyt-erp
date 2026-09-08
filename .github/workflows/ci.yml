@@ -49,7 +49,8 @@ jobs:
         run: python scripts/verify_migration_compatibility.py
       - name: Initialize PostgreSQL test schema
         run: |
-          for migration in database/migrations/[0-9][0-9][0-9]_*.sql; do
+          set -euo pipefail
+          for migration in database/migrations/*.sql; do
             echo "Applying $migration"
             PGPASSWORD=eyt_test psql -h localhost -U eyt_user -d eyt_erp_test -v ON_ERROR_STOP=1 -f "$migration"
           done
