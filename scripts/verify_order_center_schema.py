@@ -1,6 +1,5 @@
 """Integration smoke test for the PostgreSQL Order Center schema contract."""
 import os
-import sys
 
 import psycopg
 
@@ -30,7 +29,7 @@ def main() -> None:
                     "credit_status", "available_credit",
                 },
                 "order_audit_log": {"order_no", "event_type"},
-                "representatives": {"id", "representative_code", "name", "active"},
+                "representatives": {"id", "representative_code", "name", "is_active"},
             }
             for table, columns in required.items():
                 cur.execute(
