@@ -20,6 +20,7 @@ from .vehicle_master_api import router as vehicle_master_router
 from .purchase_receiving_api import router as purchase_receiving_router
 from .qc_api import router as qc_router
 from .profit_api import router as profit_router
+from .payable_api import router as payable_router
 from ..orders.fastapi_router import router as order_router, configure_order_center
 from ..orders.order_center import OrderCenter
 from ..orders.postgres_adapter import PostgresOrderRepository, PostgresInventoryGateway
@@ -40,6 +41,7 @@ app.include_router(vehicle_master_router)
 app.include_router(purchase_receiving_router)
 app.include_router(qc_router)
 app.include_router(profit_router)
+app.include_router(payable_router)
 app.include_router(order_router)
 
 def _configure_order_center() -> None:
