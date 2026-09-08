@@ -5,10 +5,11 @@ from decimal import Decimal
 from typing import Any
 
 import psycopg
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from .order_center import CreateOrder, OrderChannel, OrderCenter, OrderLine
+from ..production.customer_portal_api import require_customer_session
 
 router = APIRouter(prefix="/api/v1/orders", tags=["Order Center"])
 
@@ -36,8 +37,8 @@ def configure_order_center(service: OrderCenter) -> None:
     order_center = service
 
 
-def _resolve_prices(items: list[ItemIn]) -> list[ItemIn]:
-    """Resolve omitted/zero prices from canonical Master Data."""
+def _resolve_prices(items: list[ItemIn], customer_id: str | None = None) -> list[ItemIn]:
+    """Resolve prices in order: customer price list, price master, product sale price."""
     unresolved = [i.product_id for i in items if i.unit_price is None or i.unit_price <= 0]
     if not unresolved:
         return items
@@ -45,20 +46,59 @@ def _resolve_prices(items: list[ItemIn]) -> list[ItemIn]:
     if not database_url:
         raise HTTPException(status_code=503, detail="DATABASE_URL is not configured")
     with psycopg.connect(database_url) as conn, conn.cursor() as cur:
-        cur.execute(
-            "SELECT id, sale_price, is_active FROM products WHERE id = ANY(%s::uuid[])",
-            (unresolved,),
-        )
-        rows = {str(row[0]): row for row in cur.fetchall()}
+        price_rows = {}
+        if customer_id:
+            cur.execute(
+                """SELECT pli.product_id, pli.unit_price
+                   FROM customers c
+                   JOIN price_lists pl ON pl.id=c.default_price_list_id
+                   JOIN price_list_items pli ON pli.price_list_id=pl.id
+                   WHERE c.id=%s AND pl.active=TRUE AND pli.active=TRUE
+                     AND (pl.valid_to IS NULL OR pl.valid_to>CURRENT_TIMESTAMP)
+                     AND (pli.valid_to IS NULL OR pli.valid_to>CURRENT_TIMESTAMP)
+                     AND pli.valid_from<=CURRENT_TIMESTAMP
+                     AND pli.product_id=ANY(%s::uuid[])
+                     AND pli.min_quantity<=1
+                   ORDER BY pli.product_id, pli.min_quantity DESC, pli.valid_from DESC""",
+                (customer_id, unresolved),
+            )
+            price_rows = {str(r[0]): Decimal(str(r[1])) for r in cur.fetchall()}
+
+        remaining = [pid for pid in unresolved if str(pid) not in price_rows]
+        master_rows = {}
+        if remaining:
+            cur.execute(
+                """SELECT product_id, final_price
+                   FROM price_master
+                   WHERE product_id=ANY(%s::uuid[]) AND status='ACTIVE'
+                     AND effective_from<=CURRENT_TIMESTAMP
+                     AND (effective_to IS NULL OR effective_to>CURRENT_TIMESTAMP)
+                   ORDER BY product_id, effective_from DESC""",
+                (remaining,),
+            )
+            master_rows = {str(r[0]): Decimal(str(r[1] or 0)) for r in cur.fetchall()}
+
+        product_rows = {}
+        remaining = [pid for pid in unresolved if str(pid) not in price_rows and str(pid) not in master_rows]
+        if remaining:
+            cur.execute(
+                "SELECT id, sale_price, is_active FROM products WHERE id=ANY(%s::uuid[])",
+                (remaining,),
+            )
+            product_rows = {str(r[0]): r for r in cur.fetchall()}
+
     resolved: list[ItemIn] = []
     for item in items:
         if item.unit_price is not None and item.unit_price > 0:
             resolved.append(item)
             continue
-        row = rows.get(str(item.product_id))
-        if not row or not row[2]:
-            raise HTTPException(status_code=422, detail=f"active product not found: {item.product_id}")
-        price = Decimal(str(row[1] or 0))
+        key = str(item.product_id)
+        price = price_rows.get(key) or master_rows.get(key)
+        if price is None:
+            row = product_rows.get(key)
+            if not row or not row[2]:
+                raise HTTPException(status_code=422, detail=f"active product not found: {item.product_id}")
+            price = Decimal(str(row[1] or 0))
         if price <= 0:
             raise HTTPException(status_code=422, detail=f"product has no valid sale price: {item.product_id}")
         resolved.append(item.model_copy(update={"unit_price": price}))
@@ -66,11 +106,17 @@ def _resolve_prices(items: list[ItemIn]) -> list[ItemIn]:
 
 
 @router.post("", status_code=201)
-def create_order(payload: OrderIn, idempotency_key: str | None = Header(default=None)) -> dict[str, Any]:
+def create_order(payload: OrderIn, request: Request, idempotency_key: str | None = Header(default=None)) -> dict[str, Any]:
     if order_center is None:
         raise HTTPException(status_code=503, detail="Order Center is not configured")
+    customer_id = payload.customer_id
+    if payload.channel.value in {"WEBSITE", "B2B"}:
+        session = require_customer_session(request)
+        if session["customerId"] != customer_id:
+            raise HTTPException(status_code=403, detail="Customer session does not match order customer")
+        customer_id = session["customerId"]
     try:
-        priced_items = _resolve_prices(payload.items)
+        priced_items = _resolve_prices(payload.items, customer_id=customer_id)
         lines = tuple(
             OrderLine(product_id=i.product_id, quantity=i.quantity, unit_price=i.unit_price or Decimal("0"))
             for i in priced_items
@@ -78,7 +124,7 @@ def create_order(payload: OrderIn, idempotency_key: str | None = Header(default=
         if any(line.unit_price <= 0 for line in lines):
             raise ValueError("every order line must have a positive unit price")
         return order_center.create(CreateOrder(
-            customer_id=payload.customer_id,
+            customer_id=customer_id,
             warehouse_code=payload.warehouse_code,
             channel=payload.channel,
             items=lines,
