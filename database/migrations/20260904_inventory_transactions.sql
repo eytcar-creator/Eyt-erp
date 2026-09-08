@@ -1,5 +1,6 @@
 -- E.Y.T ERP: real inventory transaction engine
 -- Idempotent PostgreSQL migration.
+-- Reconciles the inventory ledger with legacy databases before creating indexes.
 
 CREATE TABLE IF NOT EXISTS inventory_transactions (
     id BIGSERIAL PRIMARY KEY,
@@ -17,6 +18,26 @@ CREATE TABLE IF NOT EXISTS inventory_transactions (
     unit_cost NUMERIC(18,2) NOT NULL DEFAULT 0 CHECK (unit_cost >= 0),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Legacy/Alembic inventory ledgers may already have this table with a
+-- different column contract. Extend it instead of recreating it.
+ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS document_no VARCHAR(100);
+ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS warehouse_code VARCHAR(100);
+ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS product_code VARCHAR(100);
+ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS quantity NUMERIC(18,3);
+ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS unit VARCHAR(20) DEFAULT 'PCS';
+ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS transaction_type VARCHAR(30);
+ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS reference_type VARCHAR(50);
+ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS reference_id VARCHAR(100);
+ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS unit_cost NUMERIC(18,2) DEFAULT 0;
+ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+UPDATE inventory_transactions
+SET document_no = COALESCE(document_no, reference_id, 'LEGACY-' || id::text),
+    unit = COALESCE(unit, 'PCS'),
+    unit_cost = COALESCE(unit_cost, 0),
+    created_at = COALESCE(created_at, CURRENT_TIMESTAMP)
+WHERE document_no IS NULL OR unit IS NULL OR unit_cost IS NULL OR created_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_inventory_tx_stock
     ON inventory_transactions(product_code, warehouse_code, created_at, id);
