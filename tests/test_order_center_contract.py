@@ -20,11 +20,12 @@ def test_inventory_reservation_uses_physical_minus_reserved_stock():
     item = SimpleNamespace(product_id="p1", quantity=Decimal("30"))
     PostgresInventoryGateway.reserve_in_transaction(cur, "MAIN", (item,), "EYT-TEST")
 
-    assert len(cur.calls) == 3
+    assert len(cur.calls) == 4
     assert "FOR UPDATE" in cur.calls[0][0]
     assert "inventory_transactions" in cur.calls[1][0]
     assert "inventory_reservations" in cur.calls[2][0]
-    assert cur.calls[2][1][0] == "EYT-TEST"
+    assert "inventory_reservations" in cur.calls[3][0]
+    assert cur.calls[3][1][0] == "EYT-TEST"
 
 
 def test_inventory_reservation_rejects_insufficient_available_stock():
