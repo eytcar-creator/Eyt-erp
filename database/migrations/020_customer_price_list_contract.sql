@@ -36,9 +36,18 @@ CREATE INDEX IF NOT EXISTS ix_price_lists_active_dates
 CREATE INDEX IF NOT EXISTS ix_price_list_items_lookup
     ON price_list_items(price_list_id, product_id, active, min_quantity, valid_from);
 
-ALTER TABLE customers
-    ADD CONSTRAINT fk_customers_default_price_list
-    FOREIGN KEY (default_price_list_id) REFERENCES price_lists(id)
-    ON DELETE SET NULL;
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname='fk_customers_default_price_list'
+          AND conrelid='public.customers'::regclass
+    ) THEN
+        ALTER TABLE customers
+            ADD CONSTRAINT fk_customers_default_price_list
+            FOREIGN KEY (default_price_list_id) REFERENCES price_lists(id)
+            ON DELETE SET NULL;
+    END IF;
+END $$;
 
 COMMIT;
