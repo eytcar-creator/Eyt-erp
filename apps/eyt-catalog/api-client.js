@@ -159,3 +159,5 @@ function mountCustomerAuth() {
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mountCustomerAuth, { once: true });
 else mountCustomerAuth();
+
+import('./cart.js').catch(error => console.error('EYT cart module failed to load', error));
