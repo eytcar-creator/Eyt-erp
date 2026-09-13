@@ -8,7 +8,7 @@ import psycopg
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from .order_center import CreateOrder, OrderChannel, OrderCenter, OrderLine
+from .order_center import CreateOrder, OrderChannel, OrderCenter, OrderLine, PaymentType
 from ..production.customer_portal_api import require_customer_session
 
 router = APIRouter(prefix="/api/v1/orders", tags=["Order Center"])
@@ -28,6 +28,7 @@ class OrderIn(BaseModel):
     items: list[ItemIn] = Field(min_length=1)
     representative_id: str | None = None
     notes: str | None = None
+    payment_type: PaymentType = PaymentType.CASH
 
 
 order_center: OrderCenter | None = None
@@ -51,8 +52,6 @@ def _resolve_prices(items: list[ItemIn], customer_id: str | None = None) -> list
         raise HTTPException(status_code=503, detail="DATABASE_URL is not configured")
 
     with psycopg.connect(database_url) as conn, conn.cursor() as cur:
-        # Validate every referenced product first. A client cannot bypass this
-        # validation by submitting its own positive unit_price.
         cur.execute(
             "SELECT id, sale_price, is_active FROM products WHERE id=ANY(%s::uuid[])",
             (product_ids,),
@@ -65,8 +64,6 @@ def _resolve_prices(items: list[ItemIn], customer_id: str | None = None) -> list
 
         price_rows: dict[str, Decimal] = {}
         if customer_id:
-            # Build a request relation so min_quantity is compared against the
-            # quantity of the same product line, not against a global value.
             values_sql = ",".join(["(%s::uuid,%s::numeric)"] * len(items))
             params: list[Any] = []
             for item in items:
@@ -112,9 +109,16 @@ def _resolve_prices(items: list[ItemIn], customer_id: str | None = None) -> list
             price = Decimal(str(product_rows[key][1] or 0))
         if price <= 0:
             raise HTTPException(status_code=422, detail=f"product has no valid sale price: {item.product_id}")
-        # Never propagate client-supplied unit_price into the order.
         resolved.append(item.model_copy(update={"unit_price": price}))
     return resolved
+
+
+def _require_order_customer(request: Request, order: dict[str, Any]) -> None:
+    """Enforce customer isolation for website/B2B order reads and confirmation."""
+    if order.get("channel") in {OrderChannel.WEBSITE.value, "B2B"}:
+        session = require_customer_session(request)
+        if session["customerId"] != str(order["customer_id"]):
+            raise HTTPException(status_code=403, detail="Customer session does not match order customer")
 
 
 @router.post("", status_code=201)
@@ -143,26 +147,32 @@ def create_order(payload: OrderIn, request: Request, idempotency_key: str | None
             representative_id=payload.representative_id,
             idempotency_key=idempotency_key,
             notes=payload.notes,
+            payment_type=payload.payment_type,
         ))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/{order_no}")
-def get_order(order_no: str) -> dict[str, Any]:
+def get_order(order_no: str, request: Request) -> dict[str, Any]:
     if order_center is None:
         raise HTTPException(status_code=503, detail="Order Center is not configured")
     result = order_center.orders.get(order_no)
     if result is None:
         raise HTTPException(status_code=404, detail="Order not found")
+    _require_order_customer(request, result)
     return result
 
 
 @router.post("/{order_no}/confirm")
-def confirm_order(order_no: str) -> dict[str, Any]:
+def confirm_order(order_no: str, request: Request) -> dict[str, Any]:
     if order_center is None:
         raise HTTPException(status_code=503, detail="Order Center is not configured")
     try:
+        order = order_center.orders.get(order_no)
+        if order is None:
+            raise KeyError(order_no)
+        _require_order_customer(request, order)
         return order_center.confirm(order_no)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Order not found") from exc
