@@ -1,5 +1,6 @@
 -- E.Y.T ERP | Migration 020 | Customer Price List contract
 -- Canonical customer-specific pricing used by the B2B portal and Order Center.
+-- Compatible with the legacy price_lists/price_list_items schema from migration 009.
 BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -16,10 +17,16 @@ CREATE TABLE IF NOT EXISTS price_lists (
     CHECK (valid_to IS NULL OR valid_to > valid_from)
 );
 
--- Backward-compatible upgrade for databases where price_lists already existed
--- before the customer price-list contract was introduced.
+-- Migration 009 created the legacy price-list contract first. Upgrade it
+-- in place instead of relying on CREATE TABLE IF NOT EXISTS to change it.
 ALTER TABLE price_lists
     ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE price_lists
+    ADD COLUMN IF NOT EXISTS valid_from TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE price_lists
+    ADD COLUMN IF NOT EXISTS valid_to TIMESTAMPTZ;
+ALTER TABLE price_lists
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 CREATE TABLE IF NOT EXISTS price_list_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -36,10 +43,25 @@ CREATE TABLE IF NOT EXISTS price_list_items (
     UNIQUE(price_list_id, product_id, min_quantity, valid_from)
 );
 
+-- Migration 009 already created price_list_items. Upgrade legacy rows
+-- with the fields required by the canonical contract.
+ALTER TABLE price_list_items
+    ADD COLUMN IF NOT EXISTS valid_from TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE price_list_items
+    ADD COLUMN IF NOT EXISTS valid_to TIMESTAMPTZ;
+ALTER TABLE price_list_items
+    ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE price_list_items
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE price_list_items
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
 CREATE INDEX IF NOT EXISTS ix_price_lists_active_dates
     ON price_lists(active, valid_from, valid_to);
 CREATE INDEX IF NOT EXISTS ix_price_list_items_lookup
     ON price_list_items(price_list_id, product_id, active, min_quantity, valid_from);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_price_list_items_contract
+    ON price_list_items(price_list_id, product_id, min_quantity, valid_from);
 
 DO $$
 BEGIN
