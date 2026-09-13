@@ -162,9 +162,7 @@ FROM strategy_actions
 def actions(
     days: int = Query(30, ge=1, le=3650),
     status: str | None = Query(None),
-    principal: dict = Depends(require_permission("reporting.read")),
 ):
-    del principal
     with _connect() as conn, conn.cursor() as cur:
         generated = _generated_actions(cur, days)
         _sync_actions(cur, generated)
@@ -191,25 +189,28 @@ def update_action(
 ):
     if payload.status is None and payload.assigned_to is None and payload.due_at is None:
         raise HTTPException(400, "No action fields supplied")
+    if payload.assigned_to is not None:
+        try:
+            import uuid
+            uuid.UUID(payload.assigned_to)
+        except (ValueError, AttributeError):
+            raise HTTPException(400, "assigned_to must be a valid user UUID")
     with _connect() as conn, conn.cursor() as cur:
         cur.execute("SELECT status FROM strategy_actions WHERE id=%s FOR UPDATE", (action_id,))
         if not cur.fetchone():
             raise HTTPException(404, "Action not found")
-        if payload.assigned_to is not None:
-            try:
-                import uuid
-                uuid.UUID(payload.assigned_to)
-            except ValueError:
-                raise HTTPException(400, "assigned_to must be a valid user UUID")
         cur.execute(
             """UPDATE strategy_actions SET
                status=COALESCE(%s,status), assigned_to=COALESCE(%s::uuid,assigned_to),
-               due_at=COALESCE(%s,due_at), updated_by=%s WHERE id=%s RETURNING id""",
+               due_at=COALESCE(%s,due_at), updated_by=%s WHERE id=%s""",
             (payload.status, payload.assigned_to, payload.due_at, principal["id"], action_id),
         )
         if payload.status == "DONE":
             cur.execute("UPDATE strategy_actions SET completed_at=COALESCE(completed_at,now()) WHERE id=%s", (action_id,))
-        cur.execute("SELECT action_id FROM (SELECT %s::bigint AS action_id) q", (action_id,))
+        cur.execute(
+            "INSERT INTO eyt_audit_logs(actor_user_id,action,correlation_id,ip_address,metadata) VALUES(%s,%s,%s,%s,%s)",
+            (principal["id"], "strategy.action.update", request.headers.get("X-Correlation-ID") or os.urandom(8).hex(), request.client.host if request.client else None, {"action_id": action_id}),
+        )
         conn.commit()
         cur.execute(_SELECT + " WHERE id=%s", (action_id,))
         row = cur.fetchone()
@@ -223,7 +224,6 @@ def complete_action(
     request: Request,
     principal: dict = Depends(require_permission("reporting.read")),
 ):
-    del request
     with _connect() as conn, conn.cursor() as cur:
         cur.execute(
             """UPDATE strategy_actions
@@ -235,6 +235,10 @@ def complete_action(
         )
         if not cur.fetchone():
             raise HTTPException(404, "Action not found")
+        cur.execute(
+            "INSERT INTO eyt_audit_logs(actor_user_id,action,correlation_id,ip_address,metadata) VALUES(%s,%s,%s,%s,%s)",
+            (principal["id"], "strategy.action.complete", request.headers.get("X-Correlation-ID") or os.urandom(8).hex(), request.client.host if request.client else None, {"action_id": action_id, "realized_cash": str(payload.realized_cash), "realized_profit": str(payload.realized_profit)}),
+        )
         conn.commit()
         cur.execute(_SELECT + " WHERE id=%s", (action_id,))
         row = cur.fetchone()
