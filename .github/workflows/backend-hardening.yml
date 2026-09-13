@@ -12,6 +12,9 @@ on:
 permissions:
   contents: read
 
+env:
+  BOOTSTRAP_SECRET: ci-bootstrap-secret
+
 jobs:
   backend-hardening:
     runs-on: ubuntu-latest
