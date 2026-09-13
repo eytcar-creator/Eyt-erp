@@ -17,7 +17,6 @@ router = APIRouter(prefix="/api/v1/orders", tags=["Order Center"])
 class ItemIn(BaseModel):
     product_id: str
     quantity: Decimal = Field(gt=0)
-    # Backward-compatible input only. The backend never trusts this value.
     unit_price: Decimal | None = Field(default=None, ge=0)
 
 
@@ -40,12 +39,7 @@ def configure_order_center(service: OrderCenter) -> None:
 
 
 def _resolve_prices(items: list[ItemIn], customer_id: str | None = None) -> list[ItemIn]:
-    """Resolve authoritative prices server-side.
-
-    Client-supplied unit_price is intentionally ignored. Price precedence is:
-    customer price-list tier -> active price_master -> product sale_price.
-    Customer price tiers are selected using the actual requested line quantity.
-    """
+    """Resolve authoritative prices server-side."""
     product_ids = [str(i.product_id) for i in items]
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
@@ -114,7 +108,6 @@ def _resolve_prices(items: list[ItemIn], customer_id: str | None = None) -> list
 
 
 def _require_order_customer(request: Request, order: dict[str, Any]) -> None:
-    """Enforce customer isolation for website/B2B order reads and confirmation."""
     if order.get("channel") in {OrderChannel.WEBSITE.value, "B2B"}:
         session = require_customer_session(request)
         if session["customerId"] != str(order["customer_id"]):
@@ -128,9 +121,9 @@ def create_order(payload: OrderIn, request: Request, idempotency_key: str | None
     customer_id = payload.customer_id
     if payload.channel.value in {"WEBSITE", "B2B"}:
         session = require_customer_session(request)
-        if session["customerId"] != customer_id:
-            raise HTTPException(status_code=403, detail="Customer session does not match order customer")
         customer_id = session["customerId"]
+        if customer_id != payload.customer_id:
+            raise HTTPException(status_code=403, detail="Customer session does not match order customer")
     try:
         priced_items = _resolve_prices(payload.items, customer_id=customer_id)
         lines = tuple(
