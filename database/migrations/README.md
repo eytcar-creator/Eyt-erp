@@ -18,6 +18,9 @@ Adds sales-order traceability for repeat purchases: customer vehicle, source typ
 Adds invoice/payment source traceability, payment idempotency, and the `cash_collection_control` view for collected and outstanding balances.
 
 ## 026_profit_first_dashboard.sql
-Adds the `profit_first_order_control` view for sales, COGS, gross profit, gross margin, collected cash, outstanding receivables, and operational cash contribution.
+Adds the initial `profit_first_order_control` view for sales, COGS, gross profit, gross margin, collected cash, outstanding receivables, and operational cash contribution.
+
+## 027_profit_first_cash_realization.sql
+Corrects the Profit First control view to calculate outstanding receivables from actual invoice receivables and adds invoice-based cash-realization percentage. This prevents order value from being mistaken for an accounting receivable.
 
 The migrations are intentionally idempotent for the current development phase (`CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`). Production deployment should still record applied migration versions in a dedicated migration ledger before automated releases.
