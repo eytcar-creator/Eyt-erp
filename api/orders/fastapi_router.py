@@ -44,57 +44,40 @@ def _resolve_prices(items: list[ItemIn], customer_id: str | None = None) -> list
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
         raise HTTPException(status_code=503, detail="DATABASE_URL is not configured")
-
     with psycopg.connect(database_url) as conn, conn.cursor() as cur:
-        cur.execute(
-            "SELECT id, sale_price, is_active FROM products WHERE id=ANY(%s::uuid[])",
-            (product_ids,),
-        )
+        cur.execute("SELECT id, sale_price, is_active FROM products WHERE id=ANY(%s::uuid[])", (product_ids,))
         product_rows = {str(r[0]): r for r in cur.fetchall()}
         for pid in product_ids:
             row = product_rows.get(pid)
             if not row or not row[2]:
                 raise HTTPException(status_code=422, detail=f"active product not found: {pid}")
-
         price_rows: dict[str, Decimal] = {}
         if customer_id:
             values_sql = ",".join(["(%s::uuid,%s::numeric)"] * len(items))
             params: list[Any] = []
             for item in items:
                 params.extend([str(item.product_id), item.quantity])
-            cur.execute(
-                f"""WITH requested(product_id, quantity) AS (VALUES {values_sql})
-                    SELECT DISTINCT ON (pli.product_id)
-                           pli.product_id, pli.unit_price
+            cur.execute(f"""WITH requested(product_id, quantity) AS (VALUES {values_sql})
+                    SELECT DISTINCT ON (pli.product_id) pli.product_id, pli.unit_price
                     FROM requested r
                     JOIN customers c ON c.id=%s
                     JOIN price_lists pl ON pl.id=c.default_price_list_id
                     JOIN price_list_items pli ON pli.price_list_id=pl.id
-                                          AND pli.product_id=r.product_id
-                                          AND pli.min_quantity<=r.quantity
+                      AND pli.product_id=r.product_id AND pli.min_quantity<=r.quantity
                     WHERE pl.active=TRUE AND pli.active=TRUE
                       AND (pl.valid_to IS NULL OR pl.valid_to>CURRENT_TIMESTAMP)
                       AND (pli.valid_to IS NULL OR pli.valid_to>CURRENT_TIMESTAMP)
                       AND pli.valid_from<=CURRENT_TIMESTAMP
-                    ORDER BY pli.product_id, pli.min_quantity DESC, pli.valid_from DESC""",
-                [*params, customer_id],
-            )
+                    ORDER BY pli.product_id, pli.min_quantity DESC, pli.valid_from DESC""", [*params, customer_id])
             price_rows = {str(r[0]): Decimal(str(r[1])) for r in cur.fetchall()}
-
         remaining = [pid for pid in product_ids if pid not in price_rows]
         master_rows: dict[str, Decimal] = {}
         if remaining:
-            cur.execute(
-                """SELECT DISTINCT ON (product_id) product_id, final_price
-                   FROM price_master
-                   WHERE product_id=ANY(%s::uuid[]) AND status='ACTIVE'
-                     AND effective_from<=CURRENT_TIMESTAMP
-                     AND (effective_to IS NULL OR effective_to>CURRENT_TIMESTAMP)
-                   ORDER BY product_id, effective_from DESC""",
-                (remaining,),
-            )
+            cur.execute("""SELECT DISTINCT ON (product_id) product_id, final_price
+                   FROM price_master WHERE product_id=ANY(%s::uuid[]) AND status='ACTIVE'
+                     AND effective_from<=CURRENT_TIMESTAMP AND (effective_to IS NULL OR effective_to>CURRENT_TIMESTAMP)
+                   ORDER BY product_id, effective_from DESC""", (remaining,))
             master_rows = {str(r[0]): Decimal(str(r[1] or 0)) for r in cur.fetchall()}
-
     resolved: list[ItemIn] = []
     for item in items:
         key = str(item.product_id)
@@ -119,29 +102,20 @@ def create_order(payload: OrderIn, request: Request, idempotency_key: str | None
     if order_center is None:
         raise HTTPException(status_code=503, detail="Order Center is not configured")
     customer_id = payload.customer_id
+    items = payload.items
     if payload.channel.value in {"WEBSITE", "B2B"}:
         session = require_customer_session(request)
         customer_id = session["customerId"]
         if customer_id != payload.customer_id:
             raise HTTPException(status_code=403, detail="Customer session does not match order customer")
     try:
-        priced_items = _resolve_prices(payload.items, customer_id=customer_id)
-        lines = tuple(
-            OrderLine(product_id=i.product_id, quantity=i.quantity, unit_price=i.unit_price or Decimal("0"))
-            for i in priced_items
-        )
+        priced_items = _resolve_prices(items, customer_id=customer_id)
+        lines = tuple(OrderLine(product_id=i.product_id, quantity=i.quantity, unit_price=i.unit_price or Decimal("0")) for i in priced_items)
         if any(line.unit_price <= 0 for line in lines):
             raise ValueError("every order line must have a positive unit price")
-        return order_center.create(CreateOrder(
-            customer_id=customer_id,
-            warehouse_code=payload.warehouse_code,
-            channel=payload.channel,
-            items=lines,
-            representative_id=payload.representative_id,
-            idempotency_key=idempotency_key,
-            notes=payload.notes,
-            payment_type=payload.payment_type,
-        ))
+        return order_center.create(CreateOrder(customer_id=customer_id, warehouse_code=payload.warehouse_code,
+            channel=payload.channel, items=lines, representative_id=payload.representative_id,
+            idempotency_key=idempotency_key, notes=payload.notes, payment_type=payload.payment_type))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
