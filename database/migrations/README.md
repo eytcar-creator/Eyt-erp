@@ -14,4 +14,10 @@ Adds repeat-purchase rules, open-reminder uniqueness, due/overdue indexes, and t
 ## 024_repeat_purchase_order_bridge.sql
 Adds sales-order traceability for repeat purchases: customer vehicle, source type/id, and source channel. This allows a CRM reminder to create a real sales order while preserving its origin.
 
+## 025_cash_collection_control.sql
+Adds invoice/payment source traceability, payment idempotency, and the `cash_collection_control` view for collected and outstanding balances.
+
+## 026_profit_first_dashboard.sql
+Adds the `profit_first_order_control` view for sales, COGS, gross profit, gross margin, collected cash, outstanding receivables, and operational cash contribution.
+
 The migrations are intentionally idempotent for the current development phase (`CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`). Production deployment should still record applied migration versions in a dedicated migration ledger before automated releases.
