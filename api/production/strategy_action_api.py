@@ -1,6 +1,6 @@
 from __future__ import annotations
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Literal
 import psycopg
@@ -47,6 +47,19 @@ def actions(days:int=Query(30,ge=1,le=3650),status:str|None=Query(None)):
         if status: suffix+=" AND status=%s";params.append(status)
         suffix+=" ORDER BY CASE priority WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END,id";cur.execute(_SELECT+suffix,params);rows=cur.fetchall()
     return {"days":days,"generatedAt":date.today().isoformat(),"source":"profit_first_order_control","actions":[_row(r) for r in rows]}
+@router.get("/deadlines")
+def deadline_monitor(principal:dict=Depends(require_permission("strategy.write"))):
+    now=datetime.now(); soon24=now+timedelta(hours=24);soon72=now+timedelta(hours=72)
+    with _connect() as conn,conn.cursor() as cur:
+        cur.execute(_SELECT+" WHERE status IN ('OPEN','IN_PROGRESS') AND due_at IS NOT NULL ORDER BY due_at ASC")
+        rows=cur.fetchall()
+    overdue=[];due24=[];due72=[]
+    for r in rows:
+        item=_row(r);due=datetime.fromisoformat(item["dueAt"]) if item["dueAt"] else None
+        if due and due<now: overdue.append(item)
+        elif due and due<=soon24: due24.append(item)
+        elif due and due<=soon72: due72.append(item)
+    return {"checkedAt":now.isoformat(),"overdue":overdue,"dueWithin24h":due24,"dueWithin72h":due72,"counts":{"overdue":len(overdue),"dueWithin24h":len(due24),"dueWithin72h":len(due72)}}
 @router.patch("/actions/{action_id}")
 def update_action(action_id:int,payload:ActionUpdate,request:Request,principal:dict=Depends(require_permission("strategy.write"))):
     if payload.status is None and payload.assigned_to is None and payload.due_at is None: raise HTTPException(400,"No action fields supplied")
