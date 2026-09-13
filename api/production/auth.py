@@ -67,7 +67,7 @@ def _audit_entity_id(conn,entity_id):
     if entity_id is None or isinstance(entity_id,UUID): return entity_id
     try: return UUID(str(entity_id))
     except (ValueError,TypeError,AttributeError):
-        row=conn.execute("SELECT id FROM production_orders WHERE order_no=%s",(str(entity_id),)).fetchone(); return row[0] if row else None
+        return None
 def audit(request,principal,action,entity_id=None,metadata=None):
     with db_connection() as conn:
         normalized=_audit_entity_id(conn,entity_id); conn.execute("INSERT INTO eyt_audit_logs(actor_user_id,action,entity_id,correlation_id,ip_address,metadata) VALUES(%s,%s,%s,%s,%s,%s)",(principal["id"],action,normalized,request.headers.get("X-Correlation-ID") or secrets.token_hex(16),request.client.host if request.client else None,Json(metadata or {}))); conn.commit()

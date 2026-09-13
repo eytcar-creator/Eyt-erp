@@ -35,6 +35,10 @@ jobs:
       PGUSER: eyt
       PGPASSWORD: eyt
       PGDATABASE: eyt_test
+      BOOTSTRAP_SECRET: ci-only-bootstrap-secret
+      JWT_SECRET: ci-only-test-secret-change-me-32bytes
+      ACCESS_TOKEN_MINUTES: 15
+      REFRESH_TOKEN_DAYS: 30
 
     steps:
       - uses: actions/checkout@v4
