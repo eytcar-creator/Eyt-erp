@@ -1,6 +1,6 @@
 from __future__ import annotations
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -19,12 +19,29 @@ def _row(r):
 class ReadUpdate(BaseModel):
     is_read: bool=True
 
+@router.post('/sync')
+def sync_deadline_notifications(principal:dict=Depends(require_permission('strategy.write'))):
+    now=datetime.now(timezone.utc)
+    with _connect() as conn,conn.cursor() as cur:
+        cur.execute('''SELECT id,assigned_to,title,due_at,status FROM strategy_actions WHERE assigned_to IS NOT NULL AND due_at IS NOT NULL AND status IN ('OPEN','IN_PROGRESS') AND assigned_to=%s''',(principal['id'],))
+        actions=cur.fetchall()
+        created=0
+        for action_id,user_id,title,due_at,status in actions:
+            due=due_at if due_at.tzinfo else due_at.replace(tzinfo=timezone.utc)
+            if due < now: typ='OVERDUE'; label='اقدام از مهلت عبور کرده است'
+            elif due <= now+timedelta(hours=24): typ='DUE_24H'; label='مهلت اقدام تا ۲۴ ساعت آینده است'
+            elif due <= now+timedelta(hours=72): typ='DUE_72H'; label='مهلت اقدام تا ۷۲ ساعت آینده است'
+            else: continue
+            cur.execute('''INSERT INTO strategy_notifications(user_id,action_id,notification_type,title,body) VALUES(%s,%s,%s,%s,%s) ON CONFLICT(user_id,action_id,notification_type) DO NOTHING''',(user_id,action_id,typ,title,label))
+            created += cur.rowcount
+        conn.commit()
+    return {'created':created,'checked':len(actions)}
+
 @router.get('')
 def notifications(unread_only:bool=Query(False),limit:int=Query(50,ge=1,le=200),principal:dict=Depends(require_permission('strategy.write'))):
     where='WHERE user_id=%s'
     params=[principal['id']]
-    if unread_only:
-        where+=' AND is_read=FALSE'
+    if unread_only: where+=' AND is_read=FALSE'
     with _connect() as conn,conn.cursor() as cur:
         cur.execute(f'''SELECT id,action_id,notification_type,title,body,is_read,created_at,read_at FROM strategy_notifications {where} ORDER BY created_at DESC LIMIT %s''',(*params,limit))
         rows=cur.fetchall()
