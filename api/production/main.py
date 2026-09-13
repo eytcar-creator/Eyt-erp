@@ -27,6 +27,7 @@ from .repeat_purchase_api import router as repeat_purchase_router
 from .cash_collection_api import router as cash_collection_router
 from .profit_dashboard_api import router as profit_dashboard_router
 from .strategy_action_api import router as strategy_action_router
+from .strategy_users_api import router as strategy_users_router
 from ..orders.fastapi_router import router as order_router, configure_order_center
 from ..orders.order_center import OrderCenter
 from ..orders.postgres_adapter import PostgresOrderRepository, PostgresInventoryGateway
@@ -55,6 +56,7 @@ app.include_router(repeat_purchase_router)
 app.include_router(cash_collection_router)
 app.include_router(profit_dashboard_router)
 app.include_router(strategy_action_router)
+app.include_router(strategy_users_router)
 
 def _configure_order_center() -> None:
     database_url = os.environ.get("DATABASE_URL")
