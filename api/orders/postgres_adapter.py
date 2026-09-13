@@ -14,8 +14,6 @@ class PostgresOrderRepository:
 
     @staticmethod
     def _new_order_no() -> str:
-        # Application-generated because the canonical sales_orders baseline
-        # requires order_no and does not guarantee a database default.
         return f"EYT-{datetime.now(timezone.utc):%Y%m%d}-{uuid4().hex[:10].upper()}"
 
     def create(self, order) -> dict[str, Any]:
@@ -40,8 +38,8 @@ class PostgresOrderRepository:
                     for line in order.items:
                         cur.execute("""
                             INSERT INTO sales_order_items
-                              (sales_order_id, product_id, quantity, unit_price, unit_cost)
-                            VALUES (%s,%s,%s,%s,0)
+                              (sales_order_id, product_id, quantity, unit_price, unit_cost, status)
+                            VALUES (%s,%s,%s,%s,0,'PENDING')
                         """, (row[0], line.product_id, Decimal(line.quantity), Decimal(line.unit_price)))
                     conn.commit()
                     return {"order_no": row[1], "customer_id": row[2], "representative_id": row[3],
@@ -114,6 +112,7 @@ class PostgresOrderRepository:
                             VALUES (%s,%s,%s,%s,%s,%s,%s)
                         """, (order_no, customer_id, requested, allowed, status, available, reason))
                         if not allowed:
+                            conn.commit()
                             raise ValueError(f"credit check failed: {reason}")
 
                     PostgresInventoryGateway.reserve_in_transaction(cur, warehouse_code, items, order_no)
@@ -144,6 +143,7 @@ class PostgresOrderRepository:
         row = cur.fetchone()
         if not row:
             raise ValueError("order could not be confirmed")
+        cur.execute("UPDATE sales_order_items SET status='RESERVED' WHERE sales_order_id=(SELECT id FROM sales_orders WHERE order_no=%s)", (order_no,))
         cur.execute("INSERT INTO order_audit_log(order_no,event_type,created_at) VALUES (%s,'ORDER_CONFIRMED_AND_RESERVED',NOW())", (order_no,))
         return {"order_no": row[0], "status": row[1], "reserved": True}
 
