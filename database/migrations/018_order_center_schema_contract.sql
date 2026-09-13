@@ -4,8 +4,6 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- These columns already exist in the canonical 004 migration; IF NOT EXISTS
--- keeps this contract safe against older development databases.
 ALTER TABLE products ADD COLUMN IF NOT EXISTS product_code VARCHAR(100);
 ALTER TABLE products ADD COLUMN IF NOT EXISTS purchase_price NUMERIC(18,6) NOT NULL DEFAULT 0;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_products_product_code
@@ -35,6 +33,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_sales_orders_idempotency_key
 
 ALTER TABLE sales_order_items ADD COLUMN IF NOT EXISTS cost_snapshot NUMERIC(18,6) NOT NULL DEFAULT 0;
 ALTER TABLE sales_order_items ADD COLUMN IF NOT EXISTS contribution NUMERIC(18,6) NOT NULL DEFAULT 0;
+ALTER TABLE sales_order_items ADD COLUMN IF NOT EXISTS status VARCHAR(30) NOT NULL DEFAULT 'PENDING';
 
 ALTER TABLE inventory_reservations ADD COLUMN IF NOT EXISTS document_no VARCHAR(100);
 ALTER TABLE inventory_reservations ADD COLUMN IF NOT EXISTS warehouse_code VARCHAR(100);
@@ -52,14 +51,9 @@ CREATE TABLE IF NOT EXISTS customer_credit_profiles (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Older Order Center migration 011 created this table without payment terms.
--- Add the field explicitly so CREATE TABLE IF NOT EXISTS remains compatible.
-ALTER TABLE customer_credit_profiles
-    ADD COLUMN IF NOT EXISTS payment_terms_days INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE customer_credit_profiles
-    ADD COLUMN IF NOT EXISTS notes TEXT;
-ALTER TABLE customer_credit_profiles
-    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE customer_credit_profiles ADD COLUMN IF NOT EXISTS payment_terms_days INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE customer_credit_profiles ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE customer_credit_profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 CREATE TABLE IF NOT EXISTS order_credit_checks (
     id BIGSERIAL PRIMARY KEY,
@@ -72,12 +66,8 @@ CREATE TABLE IF NOT EXISTS order_credit_checks (
     checked_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Migration 011 has a reason column used by the runtime adapter. Keep the
--- canonical contract compatible with both the older and newer definitions.
-ALTER TABLE order_credit_checks
-    ADD COLUMN IF NOT EXISTS reason VARCHAR(120);
-ALTER TABLE order_credit_checks
-    ADD COLUMN IF NOT EXISTS checked_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE order_credit_checks ADD COLUMN IF NOT EXISTS reason VARCHAR(120);
+ALTER TABLE order_credit_checks ADD COLUMN IF NOT EXISTS checked_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 CREATE TABLE IF NOT EXISTS order_audit_log (
     id BIGSERIAL PRIMARY KEY,
@@ -88,15 +78,9 @@ CREATE TABLE IF NOT EXISTS order_audit_log (
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-ALTER TABLE order_audit_log
-    ADD COLUMN IF NOT EXISTS actor_id TEXT;
-ALTER TABLE order_audit_log
-    ADD COLUMN IF NOT EXISTS details JSONB;
+ALTER TABLE order_audit_log ADD COLUMN IF NOT EXISTS actor_id TEXT;
+ALTER TABLE order_audit_log ADD COLUMN IF NOT EXISTS details JSONB;
 
--- Canonical finance schema uses invoices.id, sales_orders.order_no and
--- payment_allocations. Build the receivables view from those real tables.
--- Due date is derived from the customer's configured payment terms because
--- the canonical invoice table does not store a separate due_date column.
 DO $$
 BEGIN
     IF to_regclass('public.invoices') IS NOT NULL
