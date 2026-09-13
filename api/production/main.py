@@ -23,6 +23,7 @@ from .profit_api import router as profit_router
 from .payable_api import router as payable_router
 from .customer_portal_api import router as customer_portal_router
 from .customer_market_api import router as customer_market_router
+from .repeat_purchase_api import router as repeat_purchase_router
 from ..orders.fastapi_router import router as order_router, configure_order_center
 from ..orders.order_center import OrderCenter
 from ..orders.postgres_adapter import PostgresOrderRepository, PostgresInventoryGateway
@@ -47,6 +48,7 @@ app.include_router(payable_router)
 app.include_router(order_router)
 app.include_router(customer_portal_router)
 app.include_router(customer_market_router)
+app.include_router(repeat_purchase_router)
 
 def _configure_order_center() -> None:
     database_url = os.environ.get("DATABASE_URL")
