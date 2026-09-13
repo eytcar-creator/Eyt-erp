@@ -109,6 +109,7 @@ def logout(request: Request):
 def customer_prices(request: Request, product_id: str | None = None, limit: int = 200):
     """Return effective prices for the authenticated customer using session identity."""
     session = require_customer_session(request)
+    # Keep the API contract explicit: callers may request up to 500 rows, never more.
     limit = min(500, max(1, limit))
     with _connect() as conn, conn.cursor() as cur:
         params: list[object] = [session["customerId"]]
