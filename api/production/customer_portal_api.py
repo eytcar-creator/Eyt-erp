@@ -107,9 +107,9 @@ def logout(request: Request):
 
 @router.get("/prices")
 def customer_prices(request: Request, product_id: str | None = None, limit: int = 200):
-    """Return the authenticated customer's effective prices only; never accepts a customer_id from the client."""
+    """Return effective prices for the authenticated customer using session identity."""
     session = require_customer_session(request)
-    limit = max(1, min(limit, 500))
+    limit = min(500, max(1, limit))
     with _connect() as conn, conn.cursor() as cur:
         params: list[object] = [session["customerId"]]
         product_clause = ""
