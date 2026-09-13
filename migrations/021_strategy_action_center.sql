@@ -45,3 +45,15 @@ DROP TRIGGER IF EXISTS trg_strategy_actions_updated_at ON strategy_actions;
 CREATE TRIGGER trg_strategy_actions_updated_at
 BEFORE UPDATE ON strategy_actions
 FOR EACH ROW EXECUTE FUNCTION strategy_actions_touch_updated_at();
+
+-- Dedicated write permission for the Action Center. Existing CEO users receive it.
+INSERT INTO eyt_permissions(code)
+VALUES ('strategy.write')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO eyt_role_permissions(role_id, permission_id)
+SELECT r.id, p.id
+FROM eyt_roles r
+CROSS JOIN eyt_permissions p
+WHERE r.name = 'CEO' AND p.code = 'strategy.write'
+ON CONFLICT DO NOTHING;
