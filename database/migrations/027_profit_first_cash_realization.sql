@@ -38,14 +38,14 @@ SELECT
     ol.sales_amount - ol.cogs_amount AS gross_profit,
     COALESCE(oc.collected_cash, 0) AS collected_cash,
     COALESCE(oc.outstanding_receivable, 0) AS outstanding_receivable,
-    COALESCE(oc.invoiced_receivable, 0) AS invoiced_receivable,
     COALESCE(oc.collected_cash, 0) - ol.cogs_amount AS operational_cash_contribution,
     CASE WHEN ol.sales_amount > 0
          THEN ROUND(100 * (ol.sales_amount - ol.cogs_amount) / ol.sales_amount, 2)
          ELSE 0 END AS gross_margin_pct,
     CASE WHEN COALESCE(oc.invoiced_receivable, 0) > 0
          THEN ROUND(100 * COALESCE(oc.collected_cash, 0) / oc.invoiced_receivable, 2)
-         ELSE 0 END AS collection_realization_pct
+         ELSE 0 END AS collection_realization_pct,
+    COALESCE(oc.invoiced_receivable, 0) AS invoiced_receivable
 FROM order_lines ol
 LEFT JOIN order_cash oc ON oc.sales_order_id = ol.sales_order_id;
 
