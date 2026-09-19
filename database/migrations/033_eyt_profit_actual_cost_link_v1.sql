@@ -1,3 +1,11 @@
+-- EYT actual production cost bridge. Keep this migration self-contained so the canonical database/migrations chain can run on a fresh database.
+ALTER TABLE sales_order_items
+    ADD COLUMN IF NOT EXISTS production_order_id BIGINT REFERENCES production_orders(id),
+    ADD COLUMN IF NOT EXISTS actual_cost_snapshot NUMERIC(18,6);
+
+CREATE INDEX IF NOT EXISTS ix_sales_order_items_production_order_id
+    ON sales_order_items(production_order_id);
+
 CREATE OR REPLACE VIEW eyt_order_actual_profitability AS
 SELECT
   o.order_no,
