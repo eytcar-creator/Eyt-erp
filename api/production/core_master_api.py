@@ -25,6 +25,27 @@ def _db():
         return None
 
 
+@router.get("/products/by-sku/{sku}")
+def product_by_sku(sku: str, _=Depends(require_permission("production.read"))):
+    db = _db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="PostgreSQL adapter is not configured")
+    with db.cursor() as cur:
+        cur.execute(
+            """SELECT id, sku, code128, product_name_fa, product_name_en,
+                      product_type, category, brand, unit, status,
+                      standard_cost, last_cost, retail_price,
+                      distribution_price, wholesale_price
+               FROM eyt_product_master WHERE sku = %s""",
+            (sku,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Product Master SKU not found")
+        columns = [d.name for d in cur.description]
+    return dict(zip(columns, row))
+
+
 @router.get("/products/{product_id}/standard-cost")
 def product_standard_cost(product_id: str, _=Depends(require_permission("production.read"))):
     db = _db()
