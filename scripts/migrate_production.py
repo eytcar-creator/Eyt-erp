@@ -17,6 +17,12 @@ MIGRATIONS = [
     ROOT / "database" / "migrations" / "011_order_center_atomic.sql",
     ROOT / "database" / "migrations" / "018_order_center_schema_contract.sql",
     ROOT / "database" / "migrations" / "20260904_inventory_transactions.sql",
+    ROOT / "database" / "migrations" / "029_eyt_core_master_v1.sql",
+    ROOT / "database" / "migrations" / "030_eyt_bom_routing_cost_engine_v1.sql",
+    ROOT / "database" / "migrations" / "031_eyt_material_consumption_v1.sql",
+    ROOT / "database" / "migrations" / "032_eyt_actual_cost_v1.sql",
+    ROOT / "database" / "migrations" / "033_eyt_profit_actual_cost_link_v1.sql",
+    ROOT / "database" / "migrations" / "034_eyt_ceo_dashboard_actual_profit.sql",
 ]
 
 
