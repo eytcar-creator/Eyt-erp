@@ -3,6 +3,7 @@ from decimal import Decimal
 import os
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from uuid import UUID
 from .auth import audit, require_permission
 from .postgres_repository import PostgresProductionRepository
 
@@ -21,15 +22,16 @@ class OrderInput(BaseModel):
     target_qty: Decimal=Field(gt=0)
     order_date: str
     customer_id: int|None=None
+    product_master_id: UUID|None=None
 
 @router.post("/orders",status_code=201)
 def create_order(payload:OrderInput,request:Request,principal:dict=Depends(require_permission("production.execute"))):
     repo=_repo()
     try:
         if repo.get_order(payload.order_no): raise HTTPException(409,"Production order already exists")
-        repo.create_order(payload.order_no,payload.product_code,payload.product_name,payload.target_qty,payload.order_date,payload.customer_id)
+        repo.create_order(payload.order_no,payload.product_code,payload.product_name,payload.target_qty,payload.order_date,payload.customer_id,str(payload.product_master_id) if payload.product_master_id else None)
     finally: repo.connection.close()
-    audit(request,principal,"production.order.create",payload.order_no,{"product_code":payload.product_code,"target_qty":str(payload.target_qty)})
+    audit(request,principal,"production.order.create",payload.order_no,{"product_code":payload.product_code,"product_master_id":str(payload.product_master_id) if payload.product_master_id else None,"target_qty":str(payload.target_qty)})
     return {"orderNo":payload.order_no,"status":"planned"}
 
 @router.get("/orders/{order_no}")
