@@ -52,7 +52,7 @@ def test_ario_2000_end_to_end_profit_flow():
                     VALUES (%s,%s,%s,%s,%s,'E.Y.T','PCS','ACTIVE',%s,%s,%s)
                     ON CONFLICT (sku) DO NOTHING
                     """,
-                    (component_sku, f"9{suffix}{len(component_sku)}",
+                    (component_sku, f"9{suffix}-{name}",
                      f"Test Ario {name}", "FINISHED_GOOD", "TEST",
                      cost, cost, Decimal("700000") if name == "FG" else cost),
                 )
