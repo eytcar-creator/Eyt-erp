@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PORTAL = (ROOT / "api/production/customer_portal_api.py").read_text(encoding="utf-8")
 ORDERS = (ROOT / "api/orders/fastapi_router.py").read_text(encoding="utf-8")
-MIGRATION = (ROOT / "database/migrations/020_customer_price_list_contract.sql").read_text(encoding="utf-8")
+MIGRATION = (ROOT / "database/migrations/020_customer_pricing_contract.sql").read_text(encoding="utf-8")
 
 
 def _customer_prices_block() -> str:
