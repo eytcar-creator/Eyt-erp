@@ -40,6 +40,14 @@ CREATE TABLE IF NOT EXISTS price_list_items (
     UNIQUE(price_list_id, product_id, min_quantity, valid_from)
 );
 
+-- Legacy environments may already have price_list_items with an older shape.
+ALTER TABLE price_list_items
+    ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE price_list_items
+    ADD COLUMN IF NOT EXISTS valid_from TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE price_list_items
+    ADD COLUMN IF NOT EXISTS valid_to TIMESTAMPTZ;
+
 ALTER TABLE customers
     ADD COLUMN IF NOT EXISTS default_price_list_id UUID;
 
