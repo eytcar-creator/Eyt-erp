@@ -21,14 +21,14 @@ SELECT
     ) / SUM(i.quantity*i.unit_price)
   ELSE 0 END AS contribution_margin
 FROM sales_orders o
-LEFT JOIN sales_order_items i ON i.order_no=o.order_no
+LEFT JOIN sales_order_items i ON i.sales_order_id=o.id
 GROUP BY o.order_no,o.customer_id,o.status,o.created_at,
          o.sales_cost,o.logistics_cost,o.finance_cost,o.other_variable_cost;
 
 CREATE OR REPLACE VIEW product_profitability_actual AS
 SELECT
   i.product_id,
-  COUNT(DISTINCT i.order_no) AS order_count,
+  COUNT(DISTINCT i.sales_order_id) AS order_count,
   COALESCE(SUM(i.quantity),0) AS units_sold,
   COALESCE(SUM(i.quantity*i.unit_price),0) AS sales,
   COALESCE(SUM(i.quantity*COALESCE(i.actual_cost_snapshot,i.cost_snapshot,0)),0) AS cogs,
