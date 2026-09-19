@@ -16,6 +16,11 @@ CREATE TABLE IF NOT EXISTS price_lists (
     CHECK (valid_to IS NULL OR valid_to > valid_from)
 );
 
+-- Legacy environments may already have price_lists without the current active column.
+-- Keep this migration additive so the canonical index below is safe on those databases.
+ALTER TABLE price_lists
+    ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+
 CREATE TABLE IF NOT EXISTS price_list_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     price_list_id UUID NOT NULL REFERENCES price_lists(id) ON DELETE CASCADE,
