@@ -118,3 +118,57 @@ def production_cost_snapshot(production_order_id: int, _=Depends(require_permiss
         snapshot_id = cur.fetchone()[0]
         db.commit()
     return {"production_order_id": production_order_id, "snapshot_id": str(snapshot_id)}
+
+@router.get("/production/{production_order_id}/materials/requirements")
+def production_material_requirements(
+    production_order_id: int,
+    _=Depends(require_permission("production.read")),
+):
+    db = _db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="PostgreSQL adapter is not configured")
+    with db.cursor() as cur:
+        cur.execute(
+            """SELECT product_master_id, target_qty
+               FROM production_orders WHERE id=%s""",
+            (production_order_id,),
+        )
+        order = cur.fetchone()
+        if not order:
+            raise HTTPException(status_code=404, detail="Production order not found")
+        product_id, target_qty = order
+        if product_id is None:
+            raise HTTPException(status_code=409, detail="Production order has no Product Master UUID")
+        cur.execute(
+            """SELECT b.id, b.bom_code, b.version, b.yield_factor
+               FROM eyt_bom b
+               WHERE b.product_id=%s AND b.status='ACTIVE'
+               ORDER BY b.version DESC LIMIT 1""",
+            (product_id,),
+        )
+        bom = cur.fetchone()
+        if not bom:
+            raise HTTPException(status_code=404, detail="Active BOM not found")
+        bom_id, bom_code, version, yield_factor = bom
+        if yield_factor <= 0:
+            raise HTTPException(status_code=409, detail="Invalid BOM yield factor")
+        cur.execute(
+            """SELECT bi.component_product_id, p.sku, p.product_name_fa,
+                      bi.quantity_per, bi.scrap_percent, bi.unit,
+                      (bi.quantity_per * (1 + bi.scrap_percent / 100.0)
+                       * %s / %s) AS required_qty
+               FROM eyt_bom_item bi
+               JOIN eyt_product_master p ON p.id=bi.component_product_id
+               WHERE bi.bom_id=%s
+               ORDER BY bi.sequence_no""",
+            (target_qty, yield_factor, bom_id),
+        )
+        rows = cur.fetchall()
+        columns = [d.name for d in cur.description]
+    return {
+        "productionOrderId": production_order_id,
+        "productMasterId": str(product_id),
+        "targetQty": target_qty,
+        "bom": {"id": str(bom_id), "code": bom_code, "version": version, "yieldFactor": yield_factor},
+        "materials": [dict(zip(columns, row)) for row in rows],
+    }
