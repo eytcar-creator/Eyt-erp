@@ -64,10 +64,10 @@ FROM receivables;
 
 CREATE OR REPLACE VIEW ceo_profit AS
 SELECT
-  COALESCE(SUM(net_sales),0) AS net_sales,
+  COALESCE(SUM(sales),0) AS net_sales,
   COALESCE(SUM(contribution_profit),0) AS contribution_profit,
-  CASE WHEN COALESCE(SUM(net_sales),0) > 0
-       THEN SUM(contribution_profit) / SUM(net_sales) ELSE 0 END AS contribution_margin
+  CASE WHEN COALESCE(SUM(sales),0) > 0
+       THEN SUM(contribution_profit) / SUM(sales) ELSE 0 END AS contribution_margin
 FROM eyt_order_actual_profitability;
 
 CREATE OR REPLACE VIEW ceo_dashboard AS
