@@ -65,6 +65,10 @@ jobs:
       POSTGRES_USER: eyt_user
       POSTGRES_PASSWORD: eyt_smoke
       DATABASE_URL: postgresql://eyt_user:eyt_smoke@db:5432/eyt_erp
+      JWT_SECRET: ci-only-production-smoke-jwt
+      BOOTSTRAP_SECRET: ci-only-production-smoke-bootstrap
+      ACCESS_TOKEN_MINUTES: 15
+      REFRESH_TOKEN_DAYS: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
