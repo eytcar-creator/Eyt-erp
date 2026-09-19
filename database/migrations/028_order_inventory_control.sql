@@ -22,8 +22,13 @@ UPDATE warehouses
 SET name = COALESCE(NULLIF(name, ''), code)
 WHERE name IS NULL OR name = '';
 
-INSERT INTO warehouses(code, name)
-VALUES ('MAIN', 'انبار اصلی E.Y.T')
+-- Legacy product-master inventory uses name_fa instead of name.
+UPDATE warehouses
+SET name_fa = COALESCE(NULLIF(name_fa, ''), name, code)
+WHERE name_fa IS NULL OR name_fa = '';
+
+INSERT INTO warehouses(code, name, name_fa)
+VALUES ('MAIN', 'انبار اصلی E.Y.T', 'انبار اصلی E.Y.T')
 ON CONFLICT (code) DO NOTHING;
 
 ALTER TABLE sales_orders
