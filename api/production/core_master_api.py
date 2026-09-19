@@ -220,3 +220,44 @@ def apply_actual_cost_to_order_line(
         "actual_unit_cost": unit_cost,
         "cost_basis": "ACTUAL_PRODUCTION_COST",
     }
+
+
+@router.get("/ceo/dashboard")
+def ceo_dashboard(_=Depends(require_permission("finance.read"))):
+    db = _db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="PostgreSQL adapter is not configured")
+    with db.cursor() as cur:
+        cur.execute("""SELECT net_cash_movement, outstanding_receivables,
+                              overdue_receivables, high_risk_receivables,
+                              net_sales, contribution_profit, contribution_margin,
+                              actual_customer_contribution_profit,
+                              actual_product_contribution_profit,
+                              profitable_product_rows, profitable_customer_rows,
+                              generated_at
+                       FROM ceo_dashboard""")
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="CEO dashboard data not found")
+        columns = [d.name for d in cur.description]
+        dashboard = dict(zip(columns, row))
+
+        cur.execute("""SELECT product_id, order_count, units_sold, sales, cogs,
+                              contribution_profit, contribution_margin
+                       FROM product_profitability_actual
+                       ORDER BY contribution_profit DESC
+                       LIMIT 10""")
+        product_rows = cur.fetchall()
+        product_columns = [d.name for d in cur.description]
+
+        cur.execute("""SELECT customer_id, order_count, net_sales,
+                              contribution_profit, contribution_margin
+                       FROM customer_profitability_actual
+                       ORDER BY contribution_profit DESC
+                       LIMIT 10""")
+        customer_rows = cur.fetchall()
+        customer_columns = [d.name for d in cur.description]
+
+    dashboard["top_products"] = [dict(zip(product_columns, r)) for r in product_rows]
+    dashboard["top_customers"] = [dict(zip(customer_columns, r)) for r in customer_rows]
+    return dashboard
