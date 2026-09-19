@@ -31,6 +31,10 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+      BOOTSTRAP_SECRET: ${BOOTSTRAP_SECRET:?BOOTSTRAP_SECRET must be set}
+      ACCESS_TOKEN_MINUTES: ${ACCESS_TOKEN_MINUTES:-15}
+      REFRESH_TOKEN_DAYS: ${REFRESH_TOKEN_DAYS:-30}
     depends_on:
       migrate:
         condition: service_completed_successfully
