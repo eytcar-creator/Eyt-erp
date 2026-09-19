@@ -177,13 +177,45 @@ def consume_material(
             if reservation[0] < p.quantity:
                 raise HTTPException(409, "Consumption exceeds reservation quantity")
 
+        # Resolve valuation from the inventory ledger; client unitCost is only a legacy fallback.
+        cur.execute(
+            """SELECT COALESCE(SUM(CASE WHEN transaction_type IN
+              ('RECEIPT','TRANSFER_IN','PRODUCTION_RECEIPT','RETURN','ADJUSTMENT')
+              THEN quantity * unit_cost ELSE 0 END),0)
+              / NULLIF(SUM(CASE WHEN transaction_type IN
+              ('RECEIPT','TRANSFER_IN','PRODUCTION_RECEIPT','RETURN','ADJUSTMENT')
+              THEN quantity ELSE 0 END),0)
+              FROM inventory_transactions
+              WHERE product_code=%s AND warehouse_code=%s""",
+            (p.sku, p.warehouse),
+        )
+        ledger_cost = cur.fetchone()[0]
+        effective_unit_cost = ledger_cost if ledger_cost is not None else p.unitCost
+
+        # Idempotency: repeated document posting returns the existing transaction.
+        cur.execute(
+            """SELECT id FROM inventory_transactions
+               WHERE document_no=%s AND warehouse_code=%s
+                 AND product_code=%s AND transaction_type='CONSUMPTION'""",
+            (p.documentNo, p.warehouse, p.sku),
+        )
+        existing = cur.fetchone()
+        if existing:
+            return {
+                "documentNo": p.documentNo,
+                "orderNo": order_no,
+                "transactionId": existing[0],
+                "status": "already_consumed",
+                "unitCost": effective_unit_cost,
+            }
+
         cur.execute(
             """INSERT INTO inventory_transactions
                (document_no, warehouse_code, product_code, quantity, unit,
                 transaction_type, reference_type, reference_id, unit_cost)
                VALUES (%s,%s,%s,%s,'PCS','CONSUMPTION','PRODUCTION',%s,%s)
                RETURNING id""",
-            (p.documentNo, p.warehouse, p.sku, p.quantity, p.orderNo, p.unitCost),
+            (p.documentNo, p.warehouse, p.sku, p.quantity, p.orderNo, effective_unit_cost),
         )
         tx_id = cur.fetchone()[0]
 
@@ -196,16 +228,18 @@ def consume_material(
                RETURNING id""",
             (order_id, p.sku, p.warehouse, p.quantity, p.documentNo,
              principal["username"], p.notes, component_product_id,
-             p.reservationId, p.unitCost),
+             p.reservationId, effective_unit_cost),
         )
         movement_id = cur.fetchone()[0]
 
         if p.reservationId is not None:
             cur.execute(
                 """UPDATE inventory_reservations
-                   SET status='CONSUMED', consumed_at=CURRENT_TIMESTAMP
+                   SET quantity = quantity - %s,
+                       status = CASE WHEN quantity - %s <= 0 THEN 'CONSUMED' ELSE 'RESERVED' END,
+                       consumed_at = CASE WHEN quantity - %s <= 0 THEN CURRENT_TIMESTAMP ELSE consumed_at END
                    WHERE id=%s""",
-                (p.reservationId,),
+                (p.quantity, p.quantity, p.quantity, p.reservationId),
             )
 
     return {
