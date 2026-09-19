@@ -194,3 +194,29 @@ def actual_production_cost_snapshot(
         "snapshot_id": str(snapshot_id),
         "cost_basis": "ACTUAL_MATERIAL_CONSUMPTION",
     }
+
+
+@router.post("/production/{production_order_id}/apply-actual-cost")
+def apply_actual_cost_to_order_line(
+    production_order_id: int,
+    order_no: str,
+    order_item_id: int,
+    _=Depends(require_permission("finance.write")),
+):
+    db = _db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="PostgreSQL adapter is not configured")
+    with db.cursor() as cur:
+        cur.execute(
+            """SELECT eyt_apply_actual_production_cost_to_order_line(%s,%s,%s)""",
+            (order_no, order_item_id, production_order_id),
+        )
+        unit_cost = cur.fetchone()[0]
+        db.commit()
+    return {
+        "production_order_id": production_order_id,
+        "order_no": order_no,
+        "order_item_id": order_item_id,
+        "actual_unit_cost": unit_cost,
+        "cost_basis": "ACTUAL_PRODUCTION_COST",
+    }
