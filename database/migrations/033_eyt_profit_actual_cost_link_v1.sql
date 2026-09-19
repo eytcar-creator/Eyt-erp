@@ -3,6 +3,12 @@ ALTER TABLE sales_order_items
     ADD COLUMN IF NOT EXISTS production_order_id BIGINT REFERENCES production_orders(id),
     ADD COLUMN IF NOT EXISTS actual_cost_snapshot NUMERIC(18,6);
 
+ALTER TABLE sales_orders
+    ADD COLUMN IF NOT EXISTS sales_cost NUMERIC(18,2) NOT NULL DEFAULT 0 CHECK (sales_cost >= 0),
+    ADD COLUMN IF NOT EXISTS logistics_cost NUMERIC(18,2) NOT NULL DEFAULT 0 CHECK (logistics_cost >= 0),
+    ADD COLUMN IF NOT EXISTS finance_cost NUMERIC(18,2) NOT NULL DEFAULT 0 CHECK (finance_cost >= 0),
+    ADD COLUMN IF NOT EXISTS other_variable_cost NUMERIC(18,2) NOT NULL DEFAULT 0 CHECK (other_variable_cost >= 0);
+
 CREATE INDEX IF NOT EXISTS ix_sales_order_items_production_order_id
     ON sales_order_items(production_order_id);
 
