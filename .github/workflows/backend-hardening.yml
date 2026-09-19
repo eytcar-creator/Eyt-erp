@@ -15,6 +15,13 @@ permissions:
 jobs:
   backend-hardening:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://eyt_user:eyt_test@localhost:5432/eyt_erp_test
+      JWT_SECRET: ci-only-test-secret-change-me
+      BOOTSTRAP_SECRET: ci-only-bootstrap-secret
+      ACCESS_TOKEN_MINUTES: 15
+      REFRESH_TOKEN_DAYS: 30
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
