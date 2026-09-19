@@ -107,9 +107,10 @@ def reserve(payload: ReservationInput, _=Depends(require_permission("inventory.e
         if on_hand - reserved < payload.quantity:
             raise HTTPException(status_code=409, detail="Insufficient available inventory for reservation")
         cur.execute("""INSERT INTO inventory_reservations
-            (product_code, warehouse_code, reference_type, reference_id, quantity)
-            VALUES (%s,%s,%s,%s,%s) RETURNING id, created_at""",
-            (payload.productCode, payload.warehouseCode, payload.referenceType, payload.referenceId, payload.quantity))
+            (document_no, product_code, warehouse_code, reference_type, reference_id, quantity)
+            VALUES (%s,%s,%s,%s,%s,%s) RETURNING id, created_at""",
+            (f"RES-{payload.referenceId}-{payload.productCode}", payload.productCode, payload.warehouseCode,
+             payload.referenceType, payload.referenceId, payload.quantity))
         row = cur.fetchone()
     return {"id": row[0], "status": "RESERVED", "createdAt": row[1]}
 

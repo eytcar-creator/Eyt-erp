@@ -114,6 +114,9 @@ class PostgresOrderRepository:
                             VALUES (%s,%s,%s,%s,%s,%s,%s)
                         """, (order_no, customer_id, requested, allowed, status, available, reason))
                         if not allowed:
+                            # Persist the credit decision even though the confirmation
+                            # transaction must roll back any reservation/order changes.
+                            conn.commit()
                             raise ValueError(f"credit check failed: {reason}")
 
                     PostgresInventoryGateway.reserve_in_transaction(cur, warehouse_code, items, order_no)

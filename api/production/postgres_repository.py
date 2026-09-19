@@ -11,15 +11,16 @@ class PostgresProductionRepository:
 
     def create_order(self, order_no: str, product_code: str, product_name: str,
                      target_qty: Decimal, order_date: str,
-                     customer_id: int | None = None) -> None:
+                     customer_id: int | None = None,
+                     product_master_id: str | None = None) -> None:
         with self.connection.cursor() as cur:
             cur.execute(
                 """INSERT INTO production_orders
                    (order_no, product_code, product_name, target_qty,
-                    order_date, customer_id, status)
-                   VALUES (%s, %s, %s, %s, %s, %s, 'planned')""",
+                    order_date, customer_id, product_master_id, status)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, 'planned')""",
                 (order_no, product_code, product_name, target_qty,
-                 order_date, customer_id),
+                 order_date, customer_id, product_master_id),
             )
         self.connection.commit()
 
@@ -28,7 +29,7 @@ class PostgresProductionRepository:
             cur.execute(
                 """SELECT id, order_no, product_code, product_name,
                           target_qty, order_date, planned_start, planned_end,
-                          actual_start, actual_end, status, customer_id
+                          actual_start, actual_end, status, customer_id, product_master_id
                    FROM production_orders WHERE order_no = %s""",
                 (order_no,),
             )

@@ -20,7 +20,7 @@ SELECT
   COALESCE(SUM(contribution_profit),0) AS contribution_profit,
   CASE WHEN COALESCE(SUM(net_sales),0) > 0
        THEN SUM(contribution_profit) / SUM(net_sales) ELSE 0 END AS contribution_margin
-FROM order_profitability;
+FROM eyt_order_actual_profitability;
 
 CREATE OR REPLACE VIEW ceo_dashboard AS
 SELECT
@@ -31,6 +31,10 @@ SELECT
   p.net_sales,
   p.contribution_profit,
   p.contribution_margin,
+  COALESCE((SELECT SUM(cpa.contribution_profit) FROM customer_profitability_actual cpa),0) AS actual_customer_contribution_profit,
+  COALESCE((SELECT SUM(ppa.contribution_profit) FROM product_profitability_actual ppa),0) AS actual_product_contribution_profit,
+  COALESCE((SELECT COUNT(*) FROM product_profitability_actual),0) AS profitable_product_rows,
+  COALESCE((SELECT COUNT(*) FROM customer_profitability_actual),0) AS profitable_customer_rows,
   NOW() AS generated_at
 FROM ceo_cash_position c
 CROSS JOIN ceo_receivables r

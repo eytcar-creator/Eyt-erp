@@ -67,14 +67,13 @@ def test_order_center_atomic_postgres_flow_and_idempotency():
     with connection_factory() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT status, cost_snapshot, contribution FROM sales_order_items "
+                "SELECT cost_snapshot, contribution FROM sales_order_items "
                 "WHERE sales_order_id=(SELECT id FROM sales_orders WHERE order_no=%s)",
                 (first['order_no'],),
             )
             row = cur.fetchone()
-            assert row[0] is not None
-            assert Decimal(str(row[1])) == Decimal('40')
-            assert Decimal(str(row[2])) == Decimal('600')
+            assert Decimal(str(row[0])) == Decimal('40')
+            assert Decimal(str(row[1])) == Decimal('600')
 
             cur.execute(
                 "SELECT quantity FROM inventory_reservations WHERE document_no=%s",

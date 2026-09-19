@@ -2,7 +2,8 @@
 from decimal import Decimal
 import os
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
+from uuid import UUID
 from .auth import audit, require_permission
 from .postgres_repository import PostgresProductionRepository
 
@@ -15,21 +16,24 @@ def _repo():
     return PostgresProductionRepository(psycopg.connect(url))
 
 class OrderInput(BaseModel):
-    order_no: str=Field(min_length=3,max_length=50)
-    product_code: str=Field(min_length=1,max_length=100)
-    product_name: str=Field(min_length=1,max_length=255)
-    target_qty: Decimal=Field(gt=0)
-    order_date: str
-    customer_id: int|None=None
+    model_config = ConfigDict(populate_by_name=True)
+
+    order_no: str = Field(min_length=3, max_length=50, alias="orderNo")
+    product_code: str = Field(min_length=1, max_length=100, alias="productCode")
+    product_name: str = Field(min_length=1, max_length=255, alias="productName")
+    target_qty: Decimal = Field(gt=0, alias="targetQty")
+    order_date: str = Field(alias="orderDate")
+    customer_id: int | None = Field(default=None, alias="customerId")
+    product_master_id: UUID | None = Field(default=None, alias="productMasterId")
 
 @router.post("/orders",status_code=201)
 def create_order(payload:OrderInput,request:Request,principal:dict=Depends(require_permission("production.execute"))):
     repo=_repo()
     try:
         if repo.get_order(payload.order_no): raise HTTPException(409,"Production order already exists")
-        repo.create_order(payload.order_no,payload.product_code,payload.product_name,payload.target_qty,payload.order_date,payload.customer_id)
+        repo.create_order(payload.order_no,payload.product_code,payload.product_name,payload.target_qty,payload.order_date,payload.customer_id,str(payload.product_master_id) if payload.product_master_id else None)
     finally: repo.connection.close()
-    audit(request,principal,"production.order.create",payload.order_no,{"product_code":payload.product_code,"target_qty":str(payload.target_qty)})
+    audit(request,principal,"production.order.create",payload.order_no,{"product_code":payload.product_code,"product_master_id":str(payload.product_master_id) if payload.product_master_id else None,"target_qty":str(payload.target_qty)})
     return {"orderNo":payload.order_no,"status":"planned"}
 
 @router.get("/orders/{order_no}")

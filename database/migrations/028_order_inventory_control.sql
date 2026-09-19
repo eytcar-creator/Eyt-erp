@@ -9,8 +9,26 @@ CREATE TABLE IF NOT EXISTS warehouses (
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-INSERT INTO warehouses(code, name)
-VALUES ('MAIN', 'انبار اصلی E.Y.T')
+-- Legacy environments may already have warehouses with the older product-master shape.
+-- Keep the canonical name contract additive so the migration chain works on both shapes.
+ALTER TABLE warehouses
+    ADD COLUMN IF NOT EXISTS name VARCHAR(200);
+ALTER TABLE warehouses
+    ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE warehouses
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+UPDATE warehouses
+SET name = COALESCE(NULLIF(name, ''), code)
+WHERE name IS NULL OR name = '';
+
+-- Legacy product-master inventory uses name_fa instead of name.
+UPDATE warehouses
+SET name_fa = COALESCE(NULLIF(name_fa, ''), name, code)
+WHERE name_fa IS NULL OR name_fa = '';
+
+INSERT INTO warehouses(code, name, name_fa)
+VALUES ('MAIN', 'انبار اصلی E.Y.T', 'انبار اصلی E.Y.T')
 ON CONFLICT (code) DO NOTHING;
 
 ALTER TABLE sales_orders

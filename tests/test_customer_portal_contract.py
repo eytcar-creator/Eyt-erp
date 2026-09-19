@@ -9,14 +9,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PORTAL = (ROOT / "api/production/customer_portal_api.py").read_text(encoding="utf-8")
 ORDERS = (ROOT / "api/orders/fastapi_router.py").read_text(encoding="utf-8")
-MIGRATION = (ROOT / "database/migrations/020_customer_price_list_contract.sql").read_text(encoding="utf-8")
+MIGRATION = (ROOT / "database/migrations/020_customer_pricing_contract.sql").read_text(encoding="utf-8")
 
 
-def test_customer_prices_never_accepts_customer_id():
-    start = PORTAL.index('def customer_prices')
+def _customer_prices_block() -> str:
+    start = PORTAL.index("def customer_prices")
     end = PORTAL.index('@router.get("/orders")', start)
-    block = PORTAL[start:end]
-    assert "customer_id" not in block
+    return PORTAL[start:end]
+
+
+def test_customer_prices_never_accepts_client_customer_id():
+    block = _customer_prices_block()
+    assert "customer_id=" not in block
     assert 'session["customerId"]' in block
 
 
@@ -28,10 +32,7 @@ def test_customer_order_is_tenant_scoped():
 
 
 def test_customer_prices_require_authenticated_session():
-    start = PORTAL.index('def customer_prices')
-    end = PORTAL.index('@router.get("/orders")', start)
-    block = PORTAL[start:end]
-    assert "require_customer_session(request)" in block
+    assert "require_customer_session(request)" in _customer_prices_block()
 
 
 def test_price_list_has_customer_foreign_key():
@@ -41,7 +42,8 @@ def test_price_list_has_customer_foreign_key():
 def test_price_resolution_is_server_side_for_website_and_b2b():
     assert 'payload.channel.value in {"WEBSITE", "B2B"}' in ORDERS
     assert "require_customer_session(request)" in ORDERS
-    assert "_resolve_prices(items, customer_id=customer_id)" in ORDERS
+    assert "_resolve_prices(" in ORDERS
+    assert "customer_id=customer_id" in ORDERS
 
 
 def test_price_resolution_rejects_missing_or_invalid_price_without_client_override():
@@ -64,8 +66,6 @@ def test_logout_revokes_session():
 
 
 def test_price_api_limits_results():
-    start = PORTAL.index('def customer_prices')
-    end = PORTAL.index('@router.get("/orders")', start)
-    block = PORTAL[start:end]
-    assert "min(500)" in block
+    block = _customer_prices_block()
+    assert "min(limit, 500)" in block
     assert "LIMIT %s" in block

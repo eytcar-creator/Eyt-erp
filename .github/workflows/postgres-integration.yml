@@ -30,6 +30,11 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://eyt:eyt@localhost:5432/eyt_test
+      JWT_SECRET: ci-only-test-secret-change-me
+      BOOTSTRAP_SECRET: ci-only-bootstrap-secret
+      ACCESS_TOKEN_MINUTES: 15
+      REFRESH_TOKEN_DAYS: 30
+      PYTHONPATH: ${{ github.workspace }}
       PGHOST: localhost
       PGPORT: 5432
       PGUSER: eyt
