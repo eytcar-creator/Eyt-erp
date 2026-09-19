@@ -1,6 +1,20 @@
 -- EYT material consumption v1
--- Keeps the existing inventory ledger as the single stock source.
--- Adds canonical Product UUID and reservation linkage for production consumption.
+-- Legacy-safe canonical base for production material movements.
+CREATE TABLE IF NOT EXISTS production_material_movements (
+  id BIGSERIAL PRIMARY KEY,
+  production_order_id BIGINT NOT NULL REFERENCES production_orders(id),
+  operation_id BIGINT REFERENCES production_operations(id),
+  material_code VARCHAR(100) NOT NULL,
+  warehouse_code VARCHAR(100) NOT NULL,
+  quantity NUMERIC(14,3) NOT NULL CHECK(quantity>0),
+  movement_type VARCHAR(20) NOT NULL CHECK(movement_type IN ('ISSUE','RETURN')),
+  document_no VARCHAR(100) NOT NULL,
+  actor_name VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  notes TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_production_material_movements_order
+  ON production_material_movements(production_order_id,created_at);
 
 ALTER TABLE production_material_movements
   ADD COLUMN IF NOT EXISTS component_product_id uuid REFERENCES eyt_product_master(id);
