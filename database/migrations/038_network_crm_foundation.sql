@@ -154,6 +154,44 @@ CREATE TABLE IF NOT EXISTS eyt_service_reminders (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Backfill the network graph from the existing CRM/order-center entities.
+INSERT INTO eyt_network_entities(entity_code,entity_type,display_name,customer_id,phone,status)
+SELECT 'CUS-' || RIGHT('000000' || ROW_NUMBER() OVER (ORDER BY id)::text,6),
+       CASE WHEN customer_type='CONSUMER' OR customer_type IS NULL THEN 'CONSUMER' ELSE 'ORGANIZATION' END,
+       name,id,phone,CASE WHEN is_active THEN 'ACTIVE' ELSE 'INACTIVE' END
+FROM customers c
+WHERE NOT EXISTS (SELECT 1 FROM eyt_network_entities n WHERE n.customer_id=c.id);
+
+INSERT INTO eyt_network_entities(entity_code,entity_type,display_name,mechanic_id,phone,status)
+SELECT 'MEC-' || RIGHT('000000' || ROW_NUMBER() OVER (ORDER BY id)::text,6),
+       'MECHANIC',name,id,phone,CASE WHEN status='ACTIVE' THEN 'ACTIVE' ELSE 'INACTIVE' END
+FROM mechanics m
+WHERE NOT EXISTS (SELECT 1 FROM eyt_network_entities n WHERE n.mechanic_id=m.id);
+
+INSERT INTO eyt_network_entities(entity_code,entity_type,display_name,store_id,phone,status)
+SELECT 'RTL-' || RIGHT('000000' || ROW_NUMBER() OVER (ORDER BY id)::text,6),
+       'RETAILER',name,id,phone,CASE WHEN status='ACTIVE' THEN 'ACTIVE' ELSE 'INACTIVE' END
+FROM parts_stores s
+WHERE NOT EXISTS (SELECT 1 FROM eyt_network_entities n WHERE n.store_id=s.id);
+
+INSERT INTO eyt_network_entities(entity_code,entity_type,display_name,representative_id,status)
+SELECT 'REP-' || RIGHT('000000' || ROW_NUMBER() OVER (ORDER BY id)::text,6),
+       'REPRESENTATIVE',name,id,CASE WHEN active THEN 'ACTIVE' ELSE 'INACTIVE' END
+FROM representatives r
+WHERE NOT EXISTS (SELECT 1 FROM eyt_network_entities n WHERE n.representative_id=r.id);
+
+INSERT INTO eyt_channel_attribution(entity_id,channel_code,attribution_type,first_order_id,metadata)
+SELECT n.id, so.channel, 'ORDER_SOURCE', so.id, jsonb_build_object('order_no',so.order_no)
+FROM sales_orders so
+JOIN eyt_network_entities n ON n.customer_id=so.customer_id
+JOIN eyt_channel_definitions ch ON ch.code=so.channel
+WHERE so.channel IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM eyt_channel_attribution a
+      WHERE a.entity_id=n.id AND a.channel_code=so.channel
+        AND a.attribution_type='ORDER_SOURCE' AND a.first_order_id=so.id
+  );
+
 INSERT INTO eyt_permissions(code) VALUES ('crm.read'),('crm.write')
 ON CONFLICT (code) DO NOTHING;
 
