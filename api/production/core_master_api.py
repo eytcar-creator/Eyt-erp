@@ -232,12 +232,18 @@ def ceo_dashboard(days: int = 30, _=Depends(require_permission("finance.read")))
         raise HTTPException(status_code=503, detail="PostgreSQL adapter is not configured")
     with db.cursor() as cur:
         cur.execute("""
-            SELECT net_cash_movement, outstanding_receivables, overdue_receivables,
-                   high_risk_receivables, net_sales, contribution_profit, contribution_margin,
-                   actual_customer_contribution_profit, actual_product_contribution_profit,
-                   profitable_product_rows, profitable_customer_rows, generated_at
-            FROM ceo_dashboard
-        """)
+            SELECT
+              COALESCE(SUM(CASE WHEN type='INFLOW' THEN amount ELSE -amount END),0) AS net_cash_movement,
+              (SELECT outstanding_receivables FROM ceo_receivables) AS outstanding_receivables,
+              (SELECT overdue_receivables FROM ceo_receivables) AS overdue_receivables,
+              (SELECT high_risk_receivables FROM ceo_receivables) AS high_risk_receivables,
+              COALESCE((SELECT SUM(i.quantity*i.unit_price) FROM sales_order_items i JOIN sales_orders o ON o.id=i.sales_order_id WHERE o.order_date >= CURRENT_DATE - (%s - 1) AND o.status NOT IN ('DRAFT','PENDING_CONFIRMATION','CANCELLED','RETURNED')),0) AS net_sales,
+              COALESCE((SELECT SUM(i.quantity*(i.unit_price-COALESCE(i.actual_cost_snapshot,i.cost_snapshot,0))) FROM sales_order_items i JOIN sales_orders o ON o.id=i.sales_order_id WHERE o.order_date >= CURRENT_DATE - (%s - 1) AND o.status NOT IN ('DRAFT','PENDING_CONFIRMATION','CANCELLED','RETURNED')),0) AS contribution_profit,
+              COALESCE((SELECT SUM(i.quantity*(i.unit_price-COALESCE(i.actual_cost_snapshot,i.cost_snapshot,0))) / NULLIF(SUM(i.quantity*i.unit_price),0) FROM sales_order_items i JOIN sales_orders o ON o.id=i.sales_order_id WHERE o.order_date >= CURRENT_DATE - (%s - 1) AND o.status NOT IN ('DRAFT','PENDING_CONFIRMATION','CANCELLED','RETURNED')),0) AS contribution_margin,
+              NOW() AS generated_at
+            FROM cash_transactions
+            WHERE transaction_date >= CURRENT_DATE - (%s - 1)
+        """, (days, days, days, days))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="CEO dashboard data not found")
@@ -292,17 +298,31 @@ def ceo_dashboard(days: int = 30, _=Depends(require_permission("finance.read")))
         alert_cols=[d.name for d in cur.description]; alerts=dict(zip(alert_cols,cur.fetchone()))
 
         cur.execute("""
-            SELECT product_id, order_count, units_sold, sales, cogs, contribution_profit, contribution_margin
-            FROM product_profitability_actual
+            SELECT i.product_id, COUNT(DISTINCT i.sales_order_id) AS order_count,
+                   COALESCE(SUM(i.quantity),0) AS units_sold,
+                   COALESCE(SUM(i.quantity*i.unit_price),0) AS sales,
+                   COALESCE(SUM(i.quantity*COALESCE(i.actual_cost_snapshot,i.cost_snapshot,0)),0) AS cogs,
+                   COALESCE(SUM(i.quantity*(i.unit_price-COALESCE(i.actual_cost_snapshot,i.cost_snapshot,0))),0) AS contribution_profit,
+                   CASE WHEN COALESCE(SUM(i.quantity*i.unit_price),0)>0 THEN SUM(i.quantity*(i.unit_price-COALESCE(i.actual_cost_snapshot,i.cost_snapshot,0))) / SUM(i.quantity*i.unit_price) ELSE 0 END AS contribution_margin
+            FROM sales_order_items i JOIN sales_orders o ON o.id=i.sales_order_id
+            WHERE o.order_date >= CURRENT_DATE - (%s - 1)
+              AND o.status NOT IN ('DRAFT','PENDING_CONFIRMATION','CANCELLED','RETURNED')
+            GROUP BY i.product_id
             ORDER BY contribution_profit DESC LIMIT 10
-        """)
+        """, (days,))
         pcols=[d.name for d in cur.description]; top_products=[dict(zip(pcols,x)) for x in cur.fetchall()]
 
         cur.execute("""
-            SELECT customer_id, order_count, net_sales, contribution_profit, contribution_margin
-            FROM customer_profitability_actual
+            SELECT o.customer_id, COUNT(*) AS order_count,
+                   COALESCE(SUM(i.quantity*i.unit_price),0) AS net_sales,
+                   COALESCE(SUM(i.quantity*(i.unit_price-COALESCE(i.actual_cost_snapshot,i.cost_snapshot,0))),0) AS contribution_profit,
+                   CASE WHEN COALESCE(SUM(i.quantity*i.unit_price),0)>0 THEN SUM(i.quantity*(i.unit_price-COALESCE(i.actual_cost_snapshot,i.cost_snapshot,0))) / SUM(i.quantity*i.unit_price) ELSE 0 END AS contribution_margin
+            FROM sales_orders o JOIN sales_order_items i ON i.sales_order_id=o.id
+            WHERE o.order_date >= CURRENT_DATE - (%s - 1)
+              AND o.status NOT IN ('DRAFT','PENDING_CONFIRMATION','CANCELLED','RETURNED')
+            GROUP BY o.customer_id
             ORDER BY contribution_profit DESC LIMIT 10
-        """)
+        """, (days,))
         ccols=[d.name for d in cur.description]; top_customers=[dict(zip(ccols,x)) for x in cur.fetchall()]
 
         cur.execute("""
