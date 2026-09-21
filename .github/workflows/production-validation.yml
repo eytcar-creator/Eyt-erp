@@ -30,6 +30,11 @@ jobs:
         run: PYTHONPATH=. python -m pytest -q --ignore=tests/e2e --ignore=tests/test_order_center_postgres_integration.py
 
       - name: Validate Docker Compose
+        env:
+          POSTGRES_PASSWORD: ci_validation_password
+          DATABASE_URL: postgresql://eyt_user:ci_validation_password@db:5432/eyt_erp
+          JWT_SECRET: ci_jwt_secret_for_validation_only
+          BOOTSTRAP_SECRET: ci_bootstrap_secret_for_validation_only
         run: docker compose -f docker-compose.production.yml config
 
       - name: Build ERP API image
