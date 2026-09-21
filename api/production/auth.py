@@ -17,7 +17,7 @@ ALGORITHM = "HS256"
 ACCESS_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES", "15"))
 REFRESH_DAYS = int(os.getenv("REFRESH_TOKEN_DAYS", "30"))
 PERMISSIONS = {
-    "production.read", "production.execute", "qc.inspect", "qc.execute", "qc.release",
+    "production.read", "production.execute", "finance.read", "qc.inspect", "qc.execute", "qc.release",
     "reporting.read", "strategy.write", "admin.users.manage", "admin.roles.manage", "product.read", "product.write",
     "inventory.read", "inventory.execute", "inventory.write", "procurement.read", "procurement.write",
     "procurement.receive",
