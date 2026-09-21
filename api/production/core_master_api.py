@@ -298,17 +298,31 @@ def ceo_dashboard(days: int = 30, _=Depends(require_permission("finance.read")))
         alert_cols=[d.name for d in cur.description]; alerts=dict(zip(alert_cols,cur.fetchone()))
 
         cur.execute("""
-            SELECT product_id, order_count, units_sold, sales, cogs, contribution_profit, contribution_margin
-            FROM product_profitability_actual
+            SELECT i.product_id, COUNT(DISTINCT i.sales_order_id) AS order_count,
+                   COALESCE(SUM(i.quantity),0) AS units_sold,
+                   COALESCE(SUM(i.quantity*i.unit_price),0) AS sales,
+                   COALESCE(SUM(i.quantity*COALESCE(i.actual_cost_snapshot,i.cost_snapshot,0)),0) AS cogs,
+                   COALESCE(SUM(i.quantity*(i.unit_price-COALESCE(i.actual_cost_snapshot,i.cost_snapshot,0))),0) AS contribution_profit,
+                   CASE WHEN COALESCE(SUM(i.quantity*i.unit_price),0)>0 THEN SUM(i.quantity*(i.unit_price-COALESCE(i.actual_cost_snapshot,i.cost_snapshot,0))) / SUM(i.quantity*i.unit_price) ELSE 0 END AS contribution_margin
+            FROM sales_order_items i JOIN sales_orders o ON o.id=i.sales_order_id
+            WHERE o.order_date >= CURRENT_DATE - (%s - 1)
+              AND o.status NOT IN ('DRAFT','PENDING_CONFIRMATION','CANCELLED','RETURNED')
+            GROUP BY i.product_id
             ORDER BY contribution_profit DESC LIMIT 10
-        """)
+        """, (days,))
         pcols=[d.name for d in cur.description]; top_products=[dict(zip(pcols,x)) for x in cur.fetchall()]
 
         cur.execute("""
-            SELECT customer_id, order_count, net_sales, contribution_profit, contribution_margin
-            FROM customer_profitability_actual
+            SELECT o.customer_id, COUNT(*) AS order_count,
+                   COALESCE(SUM(i.quantity*i.unit_price),0) AS net_sales,
+                   COALESCE(SUM(i.quantity*(i.unit_price-COALESCE(i.actual_cost_snapshot,i.cost_snapshot,0))),0) AS contribution_profit,
+                   CASE WHEN COALESCE(SUM(i.quantity*i.unit_price),0)>0 THEN SUM(i.quantity*(i.unit_price-COALESCE(i.actual_cost_snapshot,i.cost_snapshot,0))) / SUM(i.quantity*i.unit_price) ELSE 0 END AS contribution_margin
+            FROM sales_orders o JOIN sales_order_items i ON i.sales_order_id=o.id
+            WHERE o.order_date >= CURRENT_DATE - (%s - 1)
+              AND o.status NOT IN ('DRAFT','PENDING_CONFIRMATION','CANCELLED','RETURNED')
+            GROUP BY o.customer_id
             ORDER BY contribution_profit DESC LIMIT 10
-        """)
+        """, (days,))
         ccols=[d.name for d in cur.description]; top_customers=[dict(zip(ccols,x)) for x in cur.fetchall()]
 
         cur.execute("""
