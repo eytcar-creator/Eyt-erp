@@ -20,7 +20,7 @@ PERMISSIONS = {
     "production.read", "production.execute", "finance.read", "qc.inspect", "qc.execute", "qc.release",
     "reporting.read", "strategy.write", "admin.users.manage", "admin.roles.manage", "product.read", "product.write",
     "inventory.read", "inventory.execute", "inventory.write", "procurement.read", "procurement.write",
-    "procurement.receive",
+    "procurement.receive", "crm.read", "crm.write",
 }
 class LoginInput(BaseModel):
     username: str = Field(min_length=1, max_length=120); password: str = Field(min_length=8, max_length=200)
