@@ -80,10 +80,15 @@ def _configure_order_center() -> None:
 
 _configure_order_center()
 PORTAL = Path(__file__).resolve().parents[2] / "portal" / "index.html"
+CEO_PORTAL = Path(__file__).resolve().parents[2] / "portal" / "ceo.html"
 
 @app.get("/", include_in_schema=False)
 def portal() -> FileResponse:
     return FileResponse(PORTAL)
+
+@app.get("/ceo", include_in_schema=False)
+def ceo_portal() -> FileResponse:
+    return FileResponse(CEO_PORTAL)
 
 @app.get("/health", tags=["system"])
 def health() -> dict[str, str]:

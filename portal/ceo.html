@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>E.Y.T | CEO Dashboard</title>
+<style>
+body{margin:0;background:#f3f4f6;font-family:Tahoma,Arial,sans-serif;color:#111827}.top{background:#111827;color:#fff;padding:18px 22px;display:flex;justify-content:space-between;align-items:center}.brand{font-size:21px;font-weight:800}.brand small{display:block;font-size:11px;color:#cbd5e1;margin-top:4px}.wrap{max-width:1400px;margin:auto;padding:20px}.toolbar{background:#fff;border-radius:14px;padding:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px;box-shadow:0 2px 10px #0001}.toolbar button,.toolbar select,.toolbar input{padding:9px 12px;border-radius:8px;border:1px solid #d1d5db}.primary{background:#991b1b;color:#fff;border:0!important;cursor:pointer}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.card{background:#fff;border-radius:14px;padding:16px;box-shadow:0 2px 10px #0000000b}.label{font-size:12px;color:#64748b}.value{font-size:24px;font-weight:800;margin-top:7px}.good{color:#166534}.bad{color:#991b1b}.warn{color:#92400e}.section{margin:18px 0 10px;font-size:18px;font-weight:800}.wide{grid-column:span 2}.table{width:100%;border-collapse:collapse}.table th,.table td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:right;font-size:12px}.notice{padding:12px;border-radius:10px;background:#fef3c7;color:#92400e}.login{max-width:430px;margin:70px auto;background:#fff;padding:24px;border-radius:16px;box-shadow:0 3px 18px #0002}.login input{width:100%;box-sizing:border-box;padding:11px;margin:7px 0 12px;border:1px solid #d1d5db;border-radius:8px}.hidden{display:none}@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.wide{grid-column:span 2}}@media(max-width:560px){.grid{grid-template-columns:1fr}.wide{grid-column:span 1}}
+</style>
+</head>
+<body>
+<header class="top"><div class="brand">E.Y.T <small>CEO Command Center | Profit First</small></div><button id="logout" class="primary" style="padding:9px 14px">خروج</button></header>
+<main class="wrap">
+<div id="login" class="login">
+<h2>ورود مدیر</h2><div class="label">حساب کاربری ERP</div>
+<input id="user" autocomplete="username" placeholder="Username">
+<input id="pass" type="password" autocomplete="current-password" placeholder="Password">
+<button id="loginBtn" class="primary" style="width:100%;padding:11px">ورود به داشبورد</button>
+<div id="loginMsg"></div>
+</div>
+<div id="app" class="hidden">
+<div class="toolbar"><b>بازه:</b><select id="days"><option value="7">۷ روز</option><option value="30" selected>۳۰ روز</option><option value="90">۹۰ روز</option><option value="365">۱ سال</option></select><button id="refresh" class="primary">به‌روزرسانی</button><span id="updated" class="label"></span></div>
+<div id="notice"></div>
+<div class="section">۱. پول و سود واقعی</div><div class="grid">
+<div class="card"><div class="label">فروش</div><div id="sales" class="value">-</div></div>
+<div class="card"><div class="label">سود مشارکت واقعی</div><div id="profit" class="value good">-</div></div>
+<div class="card"><div class="label">حاشیه سود</div><div id="margin" class="value">-</div></div>
+<div class="card"><div class="label">حرکت خالص نقدینگی</div><div id="cash" class="value">-</div></div>
+<div class="card"><div class="label">مطالبات</div><div id="receivable" class="value">-</div></div>
+<div class="card"><div class="label">مطالبات معوق</div><div id="overdue" class="value bad">-</div></div>
+<div class="card"><div class="label">مطالبات پرریسک +۶۰ روز</div><div id="risk" class="value bad">-</div></div>
+<div class="card"><div class="label">دریافت پیش‌پرداخت</div><div id="prepay" class="value">-</div></div>
+</div>
+<div class="section">۲. فروش و عملیات</div><div class="grid">
+<div class="card"><div class="label">تعداد سفارش</div><div id="orders" class="value">-</div></div>
+<div class="card"><div class="label">تأییدشده</div><div id="confirmed" class="value">-</div></div>
+<div class="card"><div class="label">تکمیل‌شده</div><div id="fulfilled" class="value">-</div></div>
+<div class="card"><div class="label">لغوشده</div><div id="cancelled" class="value">-</div></div>
+<div class="card"><div class="label">سفارش تولید</div><div id="prod" class="value">-</div></div>
+<div class="card"><div class="label">تولید باز</div><div id="prodopen" class="value">-</div></div>
+<div class="card"><div class="label">تأخیر تولید</div><div id="prodoverdue" class="value bad">-</div></div>
+<div class="card"><div class="label">پیشرفت تولید</div><div id="prodcompletion" class="value">-</div></div>
+</div>
+<div class="section">۳. موجودی، کیفیت و هشدار</div><div class="grid">
+<div class="card"><div class="label">موجودی واحدی</div><div id="invunits" class="value">-</div></div>
+<div class="card"><div class="label">ارزش موجودی تراکنشی</div><div id="invvalue" class="value">-</div></div>
+<div class="card"><div class="label">نرخ قبولی QC</div><div id="qc" class="value good">-</div></div>
+<div class="card"><div class="label">هشدار باز</div><div id="alerts" class="value warn">-</div></div>
+<div class="card"><div class="label">هشدار بحرانی</div><div id="highalerts" class="value bad">-</div></div>
+</div>
+<div class="section">۴. محصولات سودساز</div><div class="card wide"><div class="table-wrap"><table class="table"><thead><tr><th>Product ID</th><th>سفارش</th><th>تعداد</th><th>فروش</th><th>COGS</th><th>Contribution</th><th>Margin</th></tr></thead><tbody id="products"></tbody></table></div></div>
+<div class="section">۵. مشتریان</div><div class="card wide"><div class="table-wrap"><table class="table"><thead><tr><th>Customer ID</th><th>سفارش</th><th>فروش</th><th>Contribution</th><th>Margin</th></tr></thead><tbody id="customers"></tbody></table></div></div>
+</div>
+</main>
+<script>
+const $=id=>document.getElementById(id), money=n=>new Intl.NumberFormat('fa-IR',{maximumFractionDigits:0}).format(Number(n||0))+' ریال', num=n=>new Intl.NumberFormat('fa-IR',{maximumFractionDigits:2}).format(Number(n||0));
+let token=localStorage.getItem('eyt_ceo_token')||'';
+function showApp(){ $('login').classList.toggle('hidden',!!token); $('app').classList.toggle('hidden',!token); if(token) load(); }
+async function login(){try{const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('user').value,password:$('pass').value})});const d=await r.json();if(!r.ok)throw Error(d.detail||'ورود ناموفق');token=d.access_token;localStorage.setItem('eyt_ceo_token',token);showApp()}catch(e){$('loginMsg').innerHTML='<div class="notice">'+e.message+'</div>'}}
+async function load(){try{const r=await fetch('/api/v1/core/ceo/dashboard?days='+$('days').value,{headers:{Authorization:'Bearer '+token,Accept:'application/json'}});const d=await r.json();if(r.status===401||r.status===403){localStorage.removeItem('eyt_ceo_token');token='';showApp();throw Error(d.detail||'دسترسی مدیر لازم است')}if(!r.ok)throw Error(d.detail||'خطای API');$('sales').textContent=money(d.finance.net_sales);$('profit').textContent=money(d.finance.contribution_profit);$('margin').textContent=num(Number(d.finance.contribution_margin)*100)+'%';$('cash').textContent=money(d.finance.net_cash_movement);$('receivable').textContent=money(d.finance.outstanding_receivables);$('overdue').textContent=money(d.finance.overdue_receivables);$('risk').textContent=money(d.finance.high_risk_receivables);$('prepay').textContent=money(d.sales.prepayments);$('orders').textContent=num(d.sales.orders);$('confirmed').textContent=num(d.sales.confirmed);$('fulfilled').textContent=num(d.sales.fulfilled);$('cancelled').textContent=num(d.sales.cancelled);$('prod').textContent=num(d.production.total);$('prodopen').textContent=num(d.production.open);$('prodoverdue').textContent=num(d.production.overdue);$('prodcompletion').textContent=num(d.production.completion_rate)+'%';$('invunits').textContent=num(d.inventory.units);$('invvalue').textContent=money(d.inventory.value);$('qc').textContent=num(d.quality.acceptance_rate)+'%';$('alerts').textContent=num(d.alerts.open_alerts);$('highalerts').textContent=num(d.alerts.high_alerts);$('products').innerHTML=d.top_products.map(x=>'<tr><td>'+x.product_id+'</td><td>'+x.order_count+'</td><td>'+num(x.units_sold)+'</td><td>'+money(x.sales)+'</td><td>'+money(x.cogs)+'</td><td>'+money(x.contribution_profit)+'</td><td>'+num(Number(x.contribution_margin)*100)+'%</td></tr>').join('')||'<tr><td colspan="7">داده‌ای نیست</td></tr>';$('customers').innerHTML=d.top_customers.map(x=>'<tr><td>'+x.customer_id+'</td><td>'+x.order_count+'</td><td>'+money(x.net_sales)+'</td><td>'+money(x.contribution_profit)+'</td><td>'+num(Number(x.contribution_margin)*100)+'%</td></tr>').join('')||'<tr><td colspan="5">داده‌ای نیست</td></tr>';$('updated').textContent='آخرین بروزرسانی: '+new Date().toLocaleString('fa-IR');$('notice').innerHTML=''}catch(e){$('notice').innerHTML='<div class="notice">'+e.message+'</div>'}}
+$('loginBtn').onclick=login;$('refresh').onclick=load;$('days').onchange=load;$('logout').onclick=()=>{localStorage.removeItem('eyt_ceo_token');token='';showApp()};showApp();
+</script>
+</body></html>
