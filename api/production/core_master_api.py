@@ -224,41 +224,108 @@ def apply_actual_cost_to_order_line(
 
 
 @router.get("/ceo/dashboard")
-def ceo_dashboard(_=Depends(require_permission("finance.read"))):
+def ceo_dashboard(days: int = 30, _=Depends(require_permission("finance.read"))):
+    if days < 1 or days > 3650:
+        raise HTTPException(status_code=400, detail="days must be between 1 and 3650")
     db = _db()
     if db is None:
         raise HTTPException(status_code=503, detail="PostgreSQL adapter is not configured")
     with db.cursor() as cur:
-        cur.execute("""SELECT net_cash_movement, outstanding_receivables,
-                              overdue_receivables, high_risk_receivables,
-                              net_sales, contribution_profit, contribution_margin,
-                              actual_customer_contribution_profit,
-                              actual_product_contribution_profit,
-                              profitable_product_rows, profitable_customer_rows,
-                              generated_at
-                       FROM ceo_dashboard""")
+        cur.execute("""
+            SELECT net_cash_movement, outstanding_receivables, overdue_receivables,
+                   high_risk_receivables, net_sales, contribution_profit, contribution_margin,
+                   actual_customer_contribution_profit, actual_product_contribution_profit,
+                   profitable_product_rows, profitable_customer_rows, generated_at
+            FROM ceo_dashboard
+        """)
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="CEO dashboard data not found")
-        columns = [d.name for d in cur.description]
-        dashboard = dict(zip(columns, row))
+        cols = [d.name for d in cur.description]
+        finance = dict(zip(cols, row))
 
-        cur.execute("""SELECT product_id, order_count, units_sold, sales, cogs,
-                              contribution_profit, contribution_margin
-                       FROM product_profitability_actual
-                       ORDER BY contribution_profit DESC
-                       LIMIT 10""")
-        product_rows = cur.fetchall()
-        product_columns = [d.name for d in cur.description]
+        cur.execute("""
+            SELECT COUNT(*) AS orders,
+                   COUNT(*) FILTER (WHERE status='CONFIRMED') AS confirmed,
+                   COUNT(*) FILTER (WHERE status='FULFILLED') AS fulfilled,
+                   COUNT(*) FILTER (WHERE status='CANCELLED') AS cancelled,
+                   COALESCE(SUM(subtotal),0) AS sales,
+                   COALESCE(SUM(prepayment_amount),0) AS prepayments
+            FROM sales_orders
+            WHERE order_date >= CURRENT_DATE - (%s - 1)
+        """, (days,))
+        sales_cols=[d.name for d in cur.description]; sales=dict(zip(sales_cols,cur.fetchone()))
 
-        cur.execute("""SELECT customer_id, order_count, net_sales,
-                              contribution_profit, contribution_margin
-                       FROM customer_profitability_actual
-                       ORDER BY contribution_profit DESC
-                       LIMIT 10""")
-        customer_rows = cur.fetchall()
-        customer_columns = [d.name for d in cur.description]
+        cur.execute("""
+            SELECT COUNT(*) AS total,
+                   COUNT(*) FILTER (WHERE status NOT IN ('completed','closed','done')) AS open,
+                   COUNT(*) FILTER (WHERE planned_end < CURRENT_DATE AND status NOT IN ('completed','closed','done')) AS overdue,
+                   COALESCE(SUM(target_qty),0) AS target_qty,
+                   COALESCE(SUM(CASE WHEN actual_end IS NOT NULL THEN target_qty ELSE 0 END),0) AS completed_qty
+            FROM production_orders
+            WHERE order_date >= CURRENT_DATE - (%s - 1)
+        """, (days,))
+        prod_cols=[d.name for d in cur.description]; production=dict(zip(prod_cols,cur.fetchone()))
 
-    dashboard["top_products"] = [dict(zip(product_columns, r)) for r in product_rows]
-    dashboard["top_customers"] = [dict(zip(customer_columns, r)) for r in customer_rows]
-    return dashboard
+        cur.execute("""
+            SELECT COALESCE(SUM(quantity * CASE WHEN transaction_type IN ('RECEIPT','TRANSFER_IN','PRODUCTION_RECEIPT','RETURN') THEN 1 ELSE -1 END),0) AS units,
+                   COALESCE(SUM(quantity * unit_cost * CASE WHEN transaction_type IN ('RECEIPT','TRANSFER_IN','PRODUCTION_RECEIPT','RETURN') THEN 1 ELSE -1 END),0) AS value
+            FROM inventory_transactions
+        """)
+        inv_cols=[d.name for d in cur.description]; inventory=dict(zip(inv_cols,cur.fetchone()))
+
+        cur.execute("""
+            SELECT COUNT(*) AS inspections,
+                   COALESCE(SUM(inspected_qty),0) AS inspected_qty,
+                   COALESCE(SUM(accepted_qty),0) AS accepted_qty,
+                   COALESCE(SUM(rejected_qty),0) AS rejected_qty
+            FROM quality_inspections
+            WHERE inspection_date >= CURRENT_DATE - (%s - 1)
+        """, (days,))
+        qc_cols=[d.name for d in cur.description]; qc=dict(zip(qc_cols,cur.fetchone()))
+
+        cur.execute("""
+            SELECT COUNT(*) AS open_alerts,
+                   COUNT(*) FILTER (WHERE severity='high') AS high_alerts
+            FROM production_alerts WHERE status='open'
+        """)
+        alert_cols=[d.name for d in cur.description]; alerts=dict(zip(alert_cols,cur.fetchone()))
+
+        cur.execute("""
+            SELECT product_id, order_count, units_sold, sales, cogs, contribution_profit, contribution_margin
+            FROM product_profitability_actual
+            ORDER BY contribution_profit DESC LIMIT 10
+        """)
+        pcols=[d.name for d in cur.description]; top_products=[dict(zip(pcols,x)) for x in cur.fetchall()]
+
+        cur.execute("""
+            SELECT customer_id, order_count, net_sales, contribution_profit, contribution_margin
+            FROM customer_profitability_actual
+            ORDER BY contribution_profit DESC LIMIT 10
+        """)
+        ccols=[d.name for d in cur.description]; top_customers=[dict(zip(ccols,x)) for x in cur.fetchall()]
+
+        cur.execute("""
+            SELECT order_date, COALESCE(SUM(subtotal),0) AS sales,
+                   COALESCE(SUM(prepayment_amount),0) AS prepayments
+            FROM sales_orders
+            WHERE order_date >= CURRENT_DATE - (%s - 1)
+              AND status <> 'CANCELLED'
+            GROUP BY order_date ORDER BY order_date
+        """, (days,))
+        trend=[{"date":x[0],"sales":x[1],"prepayments":x[2]} for x in cur.fetchall()]
+
+    qc["acceptance_rate"] = (float(qc["accepted_qty"]) / float(qc["inspected_qty"]) * 100) if qc["inspected_qty"] else 0
+    production["completion_rate"] = (float(production["completed_qty"]) / float(production["target_qty"]) * 100) if production["target_qty"] else 0
+    return {
+        "period_days": days,
+        "finance": finance,
+        "sales": sales,
+        "production": production,
+        "inventory": inventory,
+        "quality": qc,
+        "alerts": alerts,
+        "top_products": top_products,
+        "top_customers": top_customers,
+        "sales_trend": trend,
+    }
