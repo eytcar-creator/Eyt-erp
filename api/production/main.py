@@ -68,6 +68,7 @@ app.include_router(strategy_action_router)
 app.include_router(strategy_users_router)
 app.include_router(strategy_notification_router)
 app.include_router(crm_network_router)
+app.include_router(automation_router)
 
 def _configure_order_center() -> None:
     database_url = os.environ.get("DATABASE_URL")
