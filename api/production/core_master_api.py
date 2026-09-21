@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -200,7 +201,7 @@ def actual_production_cost_snapshot(
 def apply_actual_cost_to_order_line(
     production_order_id: int,
     order_no: str,
-    order_item_id: int,
+    order_item_id: UUID,
     _=Depends(require_permission("finance.write")),
 ):
     db = _db()
