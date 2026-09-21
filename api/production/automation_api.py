@@ -53,6 +53,45 @@ def list_events(
     ]
 
 
+@router.post("/events/claim")
+def claim_events(
+    limit: int = Query(default=20, ge=1, le=100),
+    worker: str = Query(default="n8n", min_length=1, max_length=120),
+    principal: dict = Depends(require_permission("automation.write")),
+) -> list[dict[str, Any]]:
+    del principal
+    with _db() as conn:
+        rows = conn.execute(
+            """
+            WITH picked AS (
+                SELECT id
+                FROM eyt_automation_events
+                WHERE status='PENDING' AND available_at <= now()
+                ORDER BY created_at
+                FOR UPDATE SKIP LOCKED
+                LIMIT %s
+            )
+            UPDATE eyt_automation_events e
+            SET status='PROCESSING', locked_at=now(), locked_by=%s, attempts=attempts+1
+            FROM picked
+            WHERE e.id=picked.id
+            RETURNING e.id,e.event_type,e.aggregate_type,e.aggregate_id,e.source_table,
+                      e.payload,e.status,e.attempts,e.available_at,e.created_at
+            """,
+            (limit, worker),
+        ).fetchall()
+        conn.commit()
+    return [
+        {
+            "id": row[0], "event_type": row[1], "aggregate_type": row[2],
+            "aggregate_id": row[3], "source_table": row[4], "payload": row[5],
+            "status": row[6], "attempts": row[7], "available_at": row[8],
+            "created_at": row[9],
+        }
+        for row in rows
+    ]
+
+
 @router.post("/events/{event_id}/ack")
 def acknowledge_event(
     event_id: UUID,
