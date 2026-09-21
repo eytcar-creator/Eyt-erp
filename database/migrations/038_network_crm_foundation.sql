@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS eyt_network_relationships (
     valid_from DATE NOT NULL DEFAULT CURRENT_DATE,
     valid_to DATE,
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(from_entity_id,to_entity_id,relationship_type,valid_from),
     CHECK (from_entity_id <> to_entity_id)
 );
