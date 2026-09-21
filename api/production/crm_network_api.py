@@ -49,6 +49,15 @@ class ConsentIn(BaseModel):
     evidence: dict = Field(default_factory=dict)
 
 
+
+
+class AttributionIn(BaseModel):
+    channelCode: str = Field(min_length=2, max_length=50)
+    attributionType: str = Field(default="LAST_TOUCH", max_length=30)
+    orderId: Optional[UUID] = None
+    metadata: dict = Field(default_factory=dict)
+
+
 class RelationshipIn(BaseModel):
     toEntityId: UUID
     relationshipType: str = Field(min_length=3, max_length=50)
@@ -295,6 +304,26 @@ def set_consent(entity_id: UUID, payload: ConsentIn, _=Depends(require_permissio
         row = cur.fetchone()
         conn.commit()
     return {"id": str(row[0]), "granted": payload.granted}
+
+
+@router.post("/entities/{entity_id}/attribution")
+def add_attribution(entity_id: UUID, payload: AttributionIn, _=Depends(require_permission("crm.write"))):
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM eyt_network_entities WHERE id=%s", (entity_id,))
+        if not cur.fetchone():
+            raise HTTPException(404, "Network entity not found")
+        cur.execute("""
+            INSERT INTO eyt_channel_attribution(
+                entity_id, channel_code, attribution_type, first_order_id, metadata
+            ) VALUES(%s,%s,%s,%s,%s)
+            RETURNING id
+        """, (
+            entity_id, payload.channelCode, payload.attributionType.upper(),
+            payload.orderId, Json(payload.metadata)
+        ))
+        row = cur.fetchone()
+        conn.commit()
+    return {"id": str(row[0]), "status": "recorded"}
 
 
 @router.post("/entities/{entity_id}/relationships")
