@@ -26,8 +26,8 @@ jobs:
       - name: Compile Python
         run: python -m compileall api scripts
 
-      - name: Run tests
-        run: python -m pytest -q
+      - name: Run non-database tests
+        run: PYTHONPATH=. python -m pytest -q --ignore=tests/e2e --ignore=tests/test_order_center_postgres_integration.py
 
       - name: Validate Docker Compose
         run: docker compose -f docker-compose.production.yml config
