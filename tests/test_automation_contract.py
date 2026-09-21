@@ -26,3 +26,10 @@ def test_automation_outbox_has_core_triggers():
     assert "eyt_automation_events" in sql
     for table in ["sales_orders", "eyt_network_entities", "eyt_service_reminders"]:
         assert f"trg_eyt_automation_{table}" in sql
+
+
+def test_automation_permissions_are_seeded():
+    sql = (ROOT / "database" / "migrations" / "039_automation_event_outbox.sql").read_text(encoding="utf-8")
+    assert "automation.read" in sql
+    assert "automation.write" in sql
+    assert "WHERE r.name='CEO'" in sql
