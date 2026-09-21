@@ -29,6 +29,7 @@ MIGRATIONS = [
     ROOT / "database" / "migrations" / "036_eyt_actual_cost_order_bridge.sql",
     ROOT / "database" / "migrations" / "037_ceo_dashboard_finance_permission.sql",
     ROOT / "database" / "migrations" / "038_network_crm_foundation.sql",
+    ROOT / "database" / "migrations" / "039_automation_event_outbox.sql",
 ]
 
 def main() -> None:
