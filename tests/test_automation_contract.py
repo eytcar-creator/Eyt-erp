@@ -33,3 +33,10 @@ def test_automation_permissions_are_seeded():
     assert "automation.read" in sql
     assert "automation.write" in sql
     assert "WHERE r.name='CEO'" in sql
+
+
+def test_automation_api_claims_events_atomically():
+    api = (ROOT / "api" / "production" / "automation_api.py").read_text(encoding="utf-8")
+    assert '"/events/claim"' in api
+    assert "FOR UPDATE SKIP LOCKED" in api
+    assert "status='PROCESSING'" in api
