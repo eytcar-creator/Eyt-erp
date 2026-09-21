@@ -26,6 +26,7 @@ MIGRATIONS = [
     ROOT / "database" / "migrations" / "033_eyt_profit_actual_cost_link_v1.sql",
     ROOT / "database" / "migrations" / "034_eyt_ceo_dashboard_actual_profit.sql",
     ROOT / "database" / "migrations" / "035_deep_smoke_hardening.sql",
+    ROOT / "database" / "migrations" / "036_eyt_actual_cost_order_bridge.sql",
 ]
 
 def main() -> None:
