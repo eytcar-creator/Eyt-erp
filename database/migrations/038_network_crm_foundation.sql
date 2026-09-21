@@ -13,8 +13,8 @@ CREATE TABLE IF NOT EXISTS eyt_network_entities (
     )),
     display_name VARCHAR(250) NOT NULL,
     customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
-    mechanic_id UUID REFERENCES mechanics(id) ON DELETE SET NULL,
-    store_id UUID REFERENCES parts_stores(id) ON DELETE SET NULL,
+    mechanic_id UUID,
+    store_id UUID,
     representative_id UUID REFERENCES representatives(id) ON DELETE SET NULL,
     phone VARCHAR(80),
     email VARCHAR(250),
@@ -157,22 +157,10 @@ CREATE TABLE IF NOT EXISTS eyt_service_reminders (
 -- Backfill the network graph from the existing CRM/order-center entities.
 INSERT INTO eyt_network_entities(entity_code,entity_type,display_name,customer_id,phone,status)
 SELECT 'CUS-' || RIGHT('000000' || ROW_NUMBER() OVER (ORDER BY id)::text,6),
-       CASE WHEN customer_type='CONSUMER' OR customer_type IS NULL THEN 'CONSUMER' ELSE 'ORGANIZATION' END,
+       'CONSUMER',
        name,id,phone,CASE WHEN is_active THEN 'ACTIVE' ELSE 'INACTIVE' END
 FROM customers c
 WHERE NOT EXISTS (SELECT 1 FROM eyt_network_entities n WHERE n.customer_id=c.id);
-
-INSERT INTO eyt_network_entities(entity_code,entity_type,display_name,mechanic_id,phone,status)
-SELECT 'MEC-' || RIGHT('000000' || ROW_NUMBER() OVER (ORDER BY id)::text,6),
-       'MECHANIC',name,id,phone,CASE WHEN status='ACTIVE' THEN 'ACTIVE' ELSE 'INACTIVE' END
-FROM mechanics m
-WHERE NOT EXISTS (SELECT 1 FROM eyt_network_entities n WHERE n.mechanic_id=m.id);
-
-INSERT INTO eyt_network_entities(entity_code,entity_type,display_name,store_id,phone,status)
-SELECT 'RTL-' || RIGHT('000000' || ROW_NUMBER() OVER (ORDER BY id)::text,6),
-       'RETAILER',name,id,phone,CASE WHEN status='ACTIVE' THEN 'ACTIVE' ELSE 'INACTIVE' END
-FROM parts_stores s
-WHERE NOT EXISTS (SELECT 1 FROM eyt_network_entities n WHERE n.store_id=s.id);
 
 INSERT INTO eyt_network_entities(entity_code,entity_type,display_name,representative_id,status)
 SELECT 'REP-' || RIGHT('000000' || ROW_NUMBER() OVER (ORDER BY id)::text,6),
