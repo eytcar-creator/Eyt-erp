@@ -232,12 +232,18 @@ def ceo_dashboard(days: int = 30, _=Depends(require_permission("finance.read")))
         raise HTTPException(status_code=503, detail="PostgreSQL adapter is not configured")
     with db.cursor() as cur:
         cur.execute("""
-            SELECT net_cash_movement, outstanding_receivables, overdue_receivables,
-                   high_risk_receivables, net_sales, contribution_profit, contribution_margin,
-                   actual_customer_contribution_profit, actual_product_contribution_profit,
-                   profitable_product_rows, profitable_customer_rows, generated_at
-            FROM ceo_dashboard
-        """)
+            SELECT
+              COALESCE(SUM(CASE WHEN type='INFLOW' THEN amount ELSE -amount END),0) AS net_cash_movement,
+              (SELECT outstanding_receivables FROM ceo_receivables) AS outstanding_receivables,
+              (SELECT overdue_receivables FROM ceo_receivables) AS overdue_receivables,
+              (SELECT high_risk_receivables FROM ceo_receivables) AS high_risk_receivables,
+              COALESCE((SELECT SUM(i.quantity*i.unit_price) FROM sales_order_items i JOIN sales_orders o ON o.id=i.sales_order_id WHERE o.order_date >= CURRENT_DATE - (%s - 1) AND o.status NOT IN ('DRAFT','PENDING_CONFIRMATION','CANCELLED','RETURNED')),0) AS net_sales,
+              COALESCE((SELECT SUM(i.quantity*(i.unit_price-COALESCE(i.actual_cost_snapshot,i.cost_snapshot,0))) FROM sales_order_items i JOIN sales_orders o ON o.id=i.sales_order_id WHERE o.order_date >= CURRENT_DATE - (%s - 1) AND o.status NOT IN ('DRAFT','PENDING_CONFIRMATION','CANCELLED','RETURNED')),0) AS contribution_profit,
+              COALESCE((SELECT SUM(i.quantity*(i.unit_price-COALESCE(i.actual_cost_snapshot,i.cost_snapshot,0))) / NULLIF(SUM(i.quantity*i.unit_price),0) FROM sales_order_items i JOIN sales_orders o ON o.id=i.sales_order_id WHERE o.order_date >= CURRENT_DATE - (%s - 1) AND o.status NOT IN ('DRAFT','PENDING_CONFIRMATION','CANCELLED','RETURNED')),0) AS contribution_margin,
+              NOW() AS generated_at
+            FROM cash_transactions
+            WHERE transaction_date >= CURRENT_DATE - (%s - 1)
+        """, (days, days, days, days))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="CEO dashboard data not found")
