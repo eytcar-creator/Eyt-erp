@@ -5,6 +5,7 @@ from typing import Optional
 from uuid import UUID
 
 import psycopg
+from psycopg.types.json import Json
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -289,7 +290,7 @@ def set_consent(entity_id: UUID, payload: ConsentIn, _=Depends(require_permissio
             RETURNING id
         """, (
             entity_id, payload.channelCode, payload.purpose.upper(), payload.granted,
-            payload.source, payload.granted, payload.granted, psycopg.types.json.Json(payload.evidence)
+            payload.source, payload.granted, payload.granted, Json(payload.evidence)
         ))
         row = cur.fetchone()
         conn.commit()
