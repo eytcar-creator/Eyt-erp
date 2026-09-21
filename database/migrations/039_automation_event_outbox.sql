@@ -81,4 +81,12 @@ CREATE TRIGGER trg_eyt_automation_service_reminders
 AFTER INSERT OR UPDATE OR DELETE ON eyt_service_reminders
 FOR EACH ROW EXECUTE FUNCTION eyt_emit_automation_event();
 
+INSERT INTO eyt_permissions(code) VALUES ('automation.read'),('automation.write')
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO eyt_role_permissions(role_id,permission_id)
+SELECT r.id,p.id FROM eyt_roles r CROSS JOIN eyt_permissions p
+WHERE r.name='CEO' AND p.code IN ('automation.read','automation.write')
+ON CONFLICT DO NOTHING;
+
 COMMIT;
