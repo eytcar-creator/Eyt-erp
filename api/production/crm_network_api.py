@@ -71,9 +71,11 @@ def _code(cur, entity_type: str) -> str:
         "SUPPLIER": "SUP", "FLEET": "FLT", "ORGANIZATION": "ORG"
     }.get(entity_type.upper(), "ENT")
     cur.execute(
-        """
-        SELECT COALESCE(
-            MAX(NULLIF((regexp_match(entity_code, '[0-9]+
+        "SELECT COALESCE(MAX(NULLIF((regexp_match(entity_code, '[0-9]+$'))[1], '')::integer), 0) + 1 "
+        "FROM eyt_network_entities WHERE entity_type=%s AND entity_code LIKE %s",
+        (entity_type.upper(), f"{prefix}-%"),
+    )
+    return f"{prefix}-{int(cur.fetchone()[0]):06d}"
 
 
 @router.get("/dashboard")
