@@ -29,6 +29,7 @@ from .profit_dashboard_api import router as profit_dashboard_router
 from .strategy_action_api import router as strategy_action_router
 from .strategy_users_api import router as strategy_users_router
 from .strategy_notification_api import router as strategy_notification_router
+from .crm_network_api import router as crm_network_router
 from .inventory_api import router as inventory_router
 from .core_master_api import router as core_master_router
 from .inventory_production_api import router as inventory_production_router
@@ -66,6 +67,7 @@ app.include_router(profit_dashboard_router)
 app.include_router(strategy_action_router)
 app.include_router(strategy_users_router)
 app.include_router(strategy_notification_router)
+app.include_router(crm_network_router)
 
 def _configure_order_center() -> None:
     database_url = os.environ.get("DATABASE_URL")
