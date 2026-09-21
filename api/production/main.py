@@ -4,7 +4,6 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 
-from .fastapi_app import app as base_app
 from .operation_api import router as operation_router
 from .production_control_api import router as production_control_router
 from .auth import router as auth_router
@@ -30,11 +29,17 @@ from .profit_dashboard_api import router as profit_dashboard_router
 from .strategy_action_api import router as strategy_action_router
 from .strategy_users_api import router as strategy_users_router
 from .strategy_notification_api import router as strategy_notification_router
+from .inventory_api import router as inventory_router
+from .core_master_api import router as core_master_router
+from .inventory_production_api import router as inventory_production_router
 from ..orders.fastapi_router import router as order_router, configure_order_center
 from ..orders.order_center import OrderCenter
 from ..orders.postgres_adapter import PostgresOrderRepository, PostgresInventoryGateway
 
-app = base_app or FastAPI(title="E.Y.T ERP API", version="0.9.2")
+app = FastAPI(title="E.Y.T ERP API", version="0.9.2")
+app.include_router(inventory_router)
+app.include_router(core_master_router)
+app.include_router(inventory_production_router)
 app.include_router(auth_router)
 app.include_router(production_control_router)
 app.include_router(operation_router)
