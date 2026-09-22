@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS eyt_automation_effects (
     channel VARCHAR(80) NOT NULL,
     action_code VARCHAR(120) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'PROCESSING'
-        CHECK (status IN ('PROCESSING','SENT','FAILED','SKIPPED')),
+        CHECK (status IN ('PROCESSING','SENT','FAILED','SKIPPED','DRY_RUN')),
     provider_message_id VARCHAR(300),
     response_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
     last_error TEXT,
