@@ -202,6 +202,26 @@ def create_entity(payload: EntityIn, _=Depends(require_permission("crm.write")))
     return {"id": str(row[0]), "code": row[1], "status": "created"}
 
 
+@router.get("/customers/{customer_id}/entity")
+def customer_entity(customer_id: UUID, _=Depends(require_permission("crm.read"))):
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute("""
+            SELECT id, entity_code, entity_type, display_name, phone, email, city, status
+            FROM eyt_network_entities
+            WHERE customer_id=%s AND entity_type='CONSUMER' AND status='ACTIVE'
+            ORDER BY created_at
+            LIMIT 1
+        """, (customer_id,))
+        row = cur.fetchone()
+    if not row:
+        raise HTTPException(404, "CRM network entity not found for customer")
+    return {
+        "id": str(row[0]), "code": row[1], "type": row[2],
+        "displayName": row[3], "phone": row[4], "email": row[5],
+        "city": row[6], "status": row[7],
+    }
+
+
 @router.get("/entities/{entity_id}")
 def entity_detail(entity_id: UUID, _=Depends(require_permission("crm.read"))):
     with _connect() as conn, conn.cursor() as cur:
