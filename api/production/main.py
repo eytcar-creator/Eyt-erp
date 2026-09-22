@@ -30,6 +30,7 @@ from .strategy_action_api import router as strategy_action_router
 from .strategy_users_api import router as strategy_users_router
 from .strategy_notification_api import router as strategy_notification_router
 from .crm_network_api import router as crm_network_router
+from .automation_api import router as automation_router
 from .inventory_api import router as inventory_router
 from .core_master_api import router as core_master_router
 from .inventory_production_api import router as inventory_production_router
