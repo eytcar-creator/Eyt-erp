@@ -40,3 +40,26 @@ def test_automation_api_claims_events_atomically():
     assert '"/events/claim"' in api
     assert "FOR UPDATE SKIP LOCKED" in api
     assert "status='PROCESSING'" in api
+
+
+def test_automation_effect_idempotency_contract():
+    migration = ROOT / "database" / "migrations" / "040_automation_effect_idempotency.sql"
+    assert migration.exists()
+    sql = migration.read_text(encoding="utf-8")
+    assert "eyt_automation_effects" in sql
+    assert "idempotency_key VARCHAR(300) NOT NULL UNIQUE" in sql
+    assert "event_id UUID REFERENCES eyt_automation_events" in sql
+
+
+def test_automation_effect_api_contract():
+    api = (ROOT / "api" / "production" / "automation_api.py").read_text(encoding="utf-8")
+    assert '"/effects/reserve"' in api
+    assert '"/effects/{effect_id}/complete"' in api
+    assert '"/effects/{effect_id}/fail"' in api
+    assert "ON CONFLICT (idempotency_key) DO NOTHING" in api
+    assert '"should_send": created' in api
+
+
+def test_automation_effect_migration_is_registered():
+    runner = (ROOT / "scripts" / "migrate_production.py").read_text(encoding="utf-8")
+    assert "040_automation_effect_idempotency.sql" in runner
