@@ -63,3 +63,11 @@ def test_automation_effect_api_contract():
 def test_automation_effect_migration_is_registered():
     runner = (ROOT / "scripts" / "migrate_production.py").read_text(encoding="utf-8")
     assert "040_automation_effect_idempotency.sql" in runner
+
+
+def test_automation_dry_run_contract():
+    migration = (ROOT / "database" / "migrations" / "040_automation_effect_idempotency.sql").read_text(encoding="utf-8")
+    api = (ROOT / "api" / "production" / "automation_api.py").read_text(encoding="utf-8")
+    assert "'DRY_RUN'" in migration
+    assert '"/effects/{effect_id}/dry-run"' in api
+    assert "status='DRY_RUN'" in api
