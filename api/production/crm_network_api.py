@@ -58,6 +58,16 @@ class AttributionIn(BaseModel):
     metadata: dict = Field(default_factory=dict)
 
 
+class ActivityIn(BaseModel):
+    eventId: Optional[UUID] = None
+    channelCode: str = Field(min_length=2, max_length=50)
+    activityType: str = Field(min_length=2, max_length=80)
+    actionCode: Optional[str] = Field(default=None, max_length=120)
+    providerMessageId: Optional[str] = Field(default=None, max_length=300)
+    outcome: str = Field(default="SUCCESS", max_length=40)
+    metadata: dict = Field(default_factory=dict)
+
+
 class RelationshipIn(BaseModel):
     toEntityId: UUID
     relationshipType: str = Field(min_length=3, max_length=50)
@@ -682,3 +692,25 @@ def graph(entity_id: UUID, depth: int = Query(1, ge=1, le=2), _=Depends(require_
          "displayName": r[4], "relationshipType": r[5], "territory": r[6]}
         for r in rows
     ]
+
+
+@router.post("/entities/{entity_id}/activities")
+def add_activity(entity_id: UUID, payload: ActivityIn, _=Depends(require_permission("crm.write"))):
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM eyt_network_entities WHERE id=%s", (entity_id,))
+        if not cur.fetchone():
+            raise HTTPException(404, "Network entity not found")
+        cur.execute("""
+            INSERT INTO eyt_crm_activities(
+                entity_id,event_id,channel_code,activity_type,action_code,
+                provider_message_id,outcome,metadata
+            ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
+        """, (
+            entity_id, payload.eventId, payload.channelCode, payload.activityType,
+            payload.actionCode, payload.providerMessageId, payload.outcome,
+            Json(payload.metadata)
+        ))
+        row = cur.fetchone()
+        conn.commit()
+    return {"id": str(row[0]), "status": "recorded"}
