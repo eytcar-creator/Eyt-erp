@@ -26,6 +26,10 @@ class EffectReserveInput(BaseModel):
     action_code: str = Field(min_length=1, max_length=120)
 
 
+class EffectDryRunInput(BaseModel):
+    response_payload: dict[str, Any] = Field(default_factory=dict)
+
+
 class EffectCompleteInput(BaseModel):
     provider_message_id: str | None = Field(default=None, max_length=300)
     response_payload: dict[str, Any] = Field(default_factory=dict)
@@ -153,6 +157,33 @@ def reserve_effect(
         "reserved": created,
         "should_send": created,
     }
+
+
+@router.post("/effects/{effect_id}/dry-run")
+def dry_run_effect(
+    effect_id: UUID,
+    payload: EffectDryRunInput,
+    principal: dict = Depends(require_permission("automation.write")),
+) -> dict[str, Any]:
+    del principal
+    with _db() as conn:
+        row = conn.execute(
+            """
+            UPDATE eyt_automation_effects
+            SET status='DRY_RUN',
+                response_payload=%s,
+                last_error=NULL,
+                updated_at=now(),
+                completed_at=now()
+            WHERE id=%s AND status='PROCESSING'
+            RETURNING id,status
+            """,
+            (Json(payload.response_payload), effect_id),
+        ).fetchone()
+        conn.commit()
+    if not row:
+        return {"id": effect_id, "status": "not_dry_run"}
+    return {"id": row[0], "status": row[1]}
 
 
 @router.post("/effects/{effect_id}/complete")
