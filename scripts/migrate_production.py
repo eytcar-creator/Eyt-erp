@@ -31,6 +31,7 @@ MIGRATIONS = [
     ROOT / "database" / "migrations" / "038_network_crm_foundation.sql",
     ROOT / "database" / "migrations" / "039_automation_event_outbox.sql",
     ROOT / "database" / "migrations" / "040_automation_effect_idempotency.sql",
+    ROOT / "database" / "migrations" / "041_crm_activity.sql",
 ]
 
 def main() -> None:
