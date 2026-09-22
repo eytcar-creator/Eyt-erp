@@ -123,3 +123,26 @@ The workflow remains DRY RUN until all are verified:
 ## First channel
 
 The architecture is channel-neutral. The first real provider should be connected only after the dry-run path and idempotency behavior are verified. No provider is hard-coded into the ERP.
+
+
+## E.Y.T API endpoints verified in the repository
+
+The current repository provides these concrete endpoints for the workflow:
+
+- Claim events: `POST /api/v1/automation/events/claim`
+- Reserve side effect: `POST /api/v1/automation/effects/reserve`
+- Complete side effect: `POST /api/v1/automation/effects/{effect_id}/complete`
+- Fail side effect: `POST /api/v1/automation/effects/{effect_id}/fail`
+- ACK event: `POST /api/v1/automation/events/{event_id}/ack`
+- Fail event: `POST /api/v1/automation/events/{event_id}/fail`
+- Read order: `GET /api/v1/orders/{order_no}`
+- Read CRM/network entity: `GET /api/v1/crm/network/entities/{entity_id}`
+- Record CRM activity: `POST /api/v1/crm/network/entities/{entity_id}/activities`
+
+The CRM activity endpoint and `eyt_crm_activities` ledger were added specifically so automation has an auditable API boundary instead of writing CRM tables directly.
+
+## Current limitation
+
+The automation event contains `customer_id` from the sales order payload, while the CRM network API is entity-oriented. A production n8n workflow must resolve the corresponding network entity before calling the activity endpoint. This mapping should be done through a dedicated CRM lookup endpoint or an existing entity search, not by direct SQL.
+
+The repository currently exposes `GET /api/v1/crm/network/entities` with search/type/city filters. A dedicated customer-ID lookup endpoint is preferable before production activation.
