@@ -76,6 +76,28 @@ def create_daily_plan(
     return {"id": str(plan_id), "status": "PLANNED"}
 
 
+@router.patch("/plans/{plan_id}")
+def update_daily_plan_status(
+    plan_id: str,
+    status: Literal["PLANNED", "IN_PROGRESS", "DONE", "BLOCKED", "CANCELLED"],
+    principal: dict = Depends(require_permission("production.execute")),
+):
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE performance_daily_plans
+               SET status=%s
+             WHERE id=%s
+             RETURNING id, status
+            """,
+            (status, plan_id),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(404, "Daily performance plan not found")
+    return {"id": str(row[0]), "status": row[1]}
+
+
 @router.post("/events")
 def create_control_event(
     payload: ControlEventInput,
@@ -139,15 +161,12 @@ def daily_control(
               COALESCE(SUM(EXTRACT(EPOCH FROM (o.actual_end-o.actual_start)))/3600,0)
             FROM production_operations o
             JOIN production_orders po ON po.id=o.production_order_id
-            LEFT JOIN performance_daily_plans p
-              ON p.production_order_id=po.id
-             AND p.plan_date=%s
             WHERE o.status='completed'
               AND o.actual_end >= %s
               AND o.actual_end < %s + INTERVAL '1 day'
               {op_location_filter}
             """,
-            [reportDate, reportDate, reportDate] + op_location_params,
+            [reportDate, reportDate] + op_location_params,
         )
         accepted, rejected, waste, operation_cost, operation_rows, actual_hours = cur.fetchone()
 
