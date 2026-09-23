@@ -30,7 +30,7 @@ def start_operation(order_no,operation_code,payload:OperationStartInput,request:
     repo=_repo()
     try:
         entity_id=_order_id(repo,order_no)
-        repo.start_operation(order_no,payload.sequenceNo,operation_code,payload.operationName,payload.contractorName)
+        repo.start_operation(order_no,payload.sequenceNo,operation_code,payload.operationName,payload.contractorName,principal["username"])
     except (KeyError,ValueError) as exc: raise HTTPException(409,str(exc)) from exc
     finally: repo.connection.close()
     audit(request,principal,"production.operation.start",entity_id,{"operation_code":operation_code,"sequence_no":payload.sequenceNo})
@@ -41,7 +41,7 @@ def complete_operation_http(order_no,operation_code,payload:OperationCompletionI
     validate_quantities(payload); repo=_repo()
     try:
         entity_id=_order_id(repo,order_no)
-        repo.record_operation(order_no,payload.sequenceNo,operation_code,payload.operationName,payload.inputQty,payload.acceptedQty,payload.rejectedQty,payload.wasteQty,payload.serviceCost,payload.transportCost,payload.contractorName)
+        repo.record_operation(order_no,payload.sequenceNo,operation_code,payload.operationName,payload.inputQty,payload.acceptedQty,payload.rejectedQty,payload.wasteQty,payload.serviceCost,payload.transportCost,payload.contractorName,principal["username"])
         with repo.connection.cursor() as cur:
             cur.execute("SELECT product_code FROM production_orders WHERE id=%s",(entity_id,)); product=cur.fetchone()[0]
             cur.execute("INSERT INTO production_inventory_ledger(production_order_id,warehouse_code,movement_type,quantity,unit,reference_no,actor_name,notes) VALUES(%s,'MAIN','WIP_RECEIPT',%s,'pcs',%s,%s,%s)",(entity_id,payload.acceptedQty,order_no,principal["username"],operation_code))
