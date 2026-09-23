@@ -53,7 +53,7 @@ class ControlEventInput(BaseModel):
 @router.post("/plans")
 def create_daily_plan(
     payload: DailyPlanInput,
-    principal: dict = Depends(require_permission("production.plan")),
+    principal: dict = Depends(require_permission("production.execute")),
 ):
     with _connect() as conn, conn.cursor() as cur:
         cur.execute(
@@ -110,7 +110,6 @@ def daily_control(
 ):
     location_filter_plan = "AND p.location_code = %s" if locationCode else ""
     location_filter_event = "AND e.location_code = %s" if locationCode else ""
-    location_filter_op = "AND p.location_code = %s" if locationCode else ""
 
     with _connect() as conn, conn.cursor() as cur:
         params_plan = [reportDate] + ([locationCode] if locationCode else [])
@@ -145,9 +144,8 @@ def daily_control(
             WHERE o.status='completed'
               AND o.actual_end >= %s
               AND o.actual_end < %s + INTERVAL '1 day'
-              {location_filter_op}
             """,
-            [reportDate, reportDate, reportDate] + ([locationCode] if locationCode else []),
+            [reportDate, reportDate, reportDate],
         )
         accepted, rejected, waste, operation_cost, operation_rows, actual_hours = cur.fetchone()
 
