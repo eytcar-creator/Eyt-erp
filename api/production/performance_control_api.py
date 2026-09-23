@@ -126,7 +126,8 @@ def daily_control(
         )
         plan_qty, plan_hours, plan_rows = cur.fetchone()
 
-        params_op = [reportDate, reportDate] + ([locationCode] if locationCode else [])
+        op_location_filter = "AND EXISTS (SELECT 1 FROM performance_daily_plans lp WHERE lp.production_order_id = po.id AND lp.plan_date = %s AND lp.location_code = %s)" if locationCode else ""
+        op_location_params = [reportDate, locationCode] if locationCode else []
         cur.execute(
             f"""
             SELECT
@@ -144,8 +145,9 @@ def daily_control(
             WHERE o.status='completed'
               AND o.actual_end >= %s
               AND o.actual_end < %s + INTERVAL '1 day'
+              {op_location_filter}
             """,
-            [reportDate, reportDate, reportDate],
+            [reportDate, reportDate, reportDate] + op_location_params,
         )
         accepted, rejected, waste, operation_cost, operation_rows, actual_hours = cur.fetchone()
 
@@ -175,6 +177,8 @@ def daily_control(
         )
         by_employee_plan = {r[0]: r[1] for r in cur.fetchall()}
 
+        employee_location_filter = "AND EXISTS (SELECT 1 FROM performance_daily_plans lp WHERE lp.production_order_id = po.id AND lp.plan_date = %s AND lp.location_code = %s)" if locationCode else ""
+        employee_location_params = [reportDate, locationCode] if locationCode else []
         cur.execute(
             f"""
             SELECT COALESCE(o.performed_by,'unassigned'),
@@ -187,10 +191,11 @@ def daily_control(
             WHERE o.status='completed'
               AND o.actual_end >= %s
               AND o.actual_end < %s + INTERVAL '1 day'
+              {employee_location_filter}
             GROUP BY 1
             ORDER BY 1
             """,
-            [reportDate, reportDate],
+            [reportDate, reportDate] + employee_location_params,
         )
         by_employee_actual = cur.fetchall()
 
@@ -250,6 +255,6 @@ def daily_control(
         "formula": {
             "achievementPct": "acceptedQty / plannedQty * 100",
             "qualityRatePct": "acceptedQty / inputQty * 100",
-            "primaryOutput": "QC-approved good output remains the management output target",
+            "primaryOutput": "acceptedQty is operation-level accepted output; QC release is a separate finished-goods gate and must not be treated as operation acceptance",
         },
     }
