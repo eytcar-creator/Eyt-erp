@@ -324,17 +324,22 @@ def add_relationship(entity_id: UUID, payload: RelationshipIn, _=Depends(require
 def graph(entity_id: UUID, depth: int = Query(1, ge=1, le=2), _=Depends(require_permission("crm.read"))):
     with _connect() as conn, conn.cursor() as cur:
         cur.execute("""
+            WITH RECURSIVE reachable(entity_id, depth) AS (
+                SELECT %s::uuid, 0
+                UNION
+                SELECT r.to_entity_id, reachable.depth + 1
+                FROM reachable
+                JOIN eyt_network_relationships r
+                  ON r.from_entity_id = reachable.entity_id
+                WHERE reachable.depth < %s
+            )
             SELECT e.entity_id, e.depth, n.entity_code, n.entity_type, n.display_name,
                    r.relationship_type, r.territory
-            FROM (
-                SELECT %s::uuid AS entity_id, 0 AS depth
-                UNION
-                SELECT to_entity_id, 1 FROM eyt_network_relationships WHERE from_entity_id=%s
-            ) e
+            FROM reachable e
             JOIN eyt_network_entities n ON n.id=e.entity_id
             LEFT JOIN eyt_network_relationships r ON r.from_entity_id=e.entity_id
             ORDER BY e.depth, n.display_name
-        """, (entity_id, entity_id))
+        """, (entity_id, depth))
         rows = cur.fetchall()
     return [
         {"id": str(r[0]), "depth": r[1], "code": r[2], "type": r[3],
