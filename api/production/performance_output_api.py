@@ -127,11 +127,11 @@ def operational_performance_summary(
     # Production operations are the source of operation-level quantities.
     # Duration is derived from the operation timestamps; no manual hours field
     # is introduced here.
-    operation_bucket = bucket_sql.replace("order_date", "po.order_date")
+    operation_bucket = bucket_sql.replace("order_date", "po2.actual_end")
     if period == "half_year":
         operation_bucket = (
             "make_date(extract(year from po.order_date)::int, "
-            "CASE WHEN extract(month from po.order_date) <= 6 THEN 1 ELSE 7 END, 1)"
+            "CASE WHEN extract(month from po2.actual_end) <= 6 THEN 1 ELSE 7 END, 1)"
         )
 
     with _connect() as conn, conn.cursor() as cur:
