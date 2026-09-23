@@ -76,8 +76,8 @@ CREATE TRIGGER trg_eyt_automation_eyt_network_entities
 AFTER INSERT OR UPDATE OR DELETE ON eyt_network_entities
 FOR EACH ROW EXECUTE FUNCTION eyt_emit_automation_event();
 
-DROP TRIGGER IF EXISTS trg_eyt_automation_service_reminders ON eyt_service_reminders;
-CREATE TRIGGER trg_eyt_automation_service_reminders
+DROP TRIGGER IF EXISTS trg_eyt_automation_eyt_service_reminders ON eyt_service_reminders;
+CREATE TRIGGER trg_eyt_automation_eyt_service_reminders
 AFTER INSERT OR UPDATE OR DELETE ON eyt_service_reminders
 FOR EACH ROW EXECUTE FUNCTION eyt_emit_automation_event();
 
