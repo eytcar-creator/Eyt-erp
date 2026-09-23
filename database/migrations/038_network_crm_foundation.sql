@@ -164,7 +164,7 @@ WHERE NOT EXISTS (SELECT 1 FROM eyt_network_entities n WHERE n.customer_id=c.id)
 
 INSERT INTO eyt_network_entities(entity_code,entity_type,display_name,representative_id,status)
 SELECT 'REP-' || RIGHT('000000' || ROW_NUMBER() OVER (ORDER BY id)::text,6),
-       'REPRESENTATIVE',name,id,CASE WHEN active THEN 'ACTIVE' ELSE 'INACTIVE' END
+       'REPRESENTATIVE',name,id,CASE WHEN r.is_active THEN 'ACTIVE' ELSE 'INACTIVE' END
 FROM representatives r
 WHERE NOT EXISTS (SELECT 1 FROM eyt_network_entities n WHERE n.representative_id=r.id);
 
