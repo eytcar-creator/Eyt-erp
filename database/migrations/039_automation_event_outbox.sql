@@ -71,8 +71,8 @@ CREATE TRIGGER trg_eyt_automation_sales_orders
 AFTER INSERT OR UPDATE OR DELETE ON sales_orders
 FOR EACH ROW EXECUTE FUNCTION eyt_emit_automation_event();
 
-DROP TRIGGER IF EXISTS trg_eyt_automation_network_entities ON eyt_network_entities;
-CREATE TRIGGER trg_eyt_automation_network_entities
+DROP TRIGGER IF EXISTS trg_eyt_automation_eyt_network_entities ON eyt_network_entities;
+CREATE TRIGGER trg_eyt_automation_eyt_network_entities
 AFTER INSERT OR UPDATE OR DELETE ON eyt_network_entities
 FOR EACH ROW EXECUTE FUNCTION eyt_emit_automation_event();
 
