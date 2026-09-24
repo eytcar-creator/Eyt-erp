@@ -30,6 +30,11 @@ class StockCountInput(BaseModel):
     notes: str | None = None
 
 
+class CountDecisionInput(BaseModel):
+    status: str = Field(pattern="^(REVIEW|APPROVED|REJECTED)$")
+    notes: str | None = None
+
+
 @router.post("/snapshot")
 def create_snapshot(snapshotDate: date, principal: dict = Depends(require_permission("inventory.adjust"))):
     cutoff = datetime.combine(snapshotDate, time.max, tzinfo=timezone.utc)
@@ -121,3 +126,68 @@ def record_stock_count(payload: StockCountInput, principal: dict = Depends(requi
         )
         count_id = cur.fetchone()[0]
     return {"id": count_id, "varianceQty": variance, "varianceValue": variance_value}
+
+
+@router.patch("/stock-count/{count_id}")
+def decide_stock_count(count_id: int, payload: CountDecisionInput, principal: dict = Depends(require_permission("inventory.adjust"))):
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute("""
+            UPDATE inventory_stock_counts
+               SET status=%s, notes=COALESCE(%s,notes),
+                   approved_by=%s, approved_at=CASE WHEN %s='APPROVED' THEN CURRENT_TIMESTAMP ELSE approved_at END
+             WHERE id=%s
+             RETURNING id,status
+        """,(payload.status,payload.notes,principal.get("username","system"),payload.status,count_id))
+        row=cur.fetchone()
+        if row is None:
+            raise HTTPException(404,"Stock count not found")
+    return {"id":row[0],"status":row[1]}
+
+
+@router.post("/close")
+def close_snapshot(snapshotDate: date, principal: dict = Depends(require_permission("inventory.adjust"))):
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM inventory_month_end_snapshots
+            WHERE snapshot_date=%s
+        """,(snapshotDate,))
+        if cur.fetchone()[0] == 0:
+            raise HTTPException(404,"Month-end snapshot not found")
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM inventory_stock_counts c
+            JOIN inventory_month_end_snapshots s ON s.id=c.snapshot_id
+            WHERE s.snapshot_date=%s AND c.status IN ('COUNTED','REVIEW')
+        """,(snapshotDate,))
+        pending=cur.fetchone()[0]
+        if pending:
+            raise HTTPException(409,f"{pending} stock-count records are not approved/rejected")
+        cur.execute("""
+            UPDATE inventory_month_end_snapshots
+               SET status='CLOSED'
+             WHERE snapshot_date=%s AND status<>'CLOSED'
+        """,(snapshotDate,))
+    return {"snapshotDate":snapshotDate.isoformat(),"status":"CLOSED"}
+
+
+@router.get("/aging")
+def inventory_aging(snapshotDate: date, principal: dict = Depends(require_permission("reporting.read"))):
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute("""
+            SELECT s.product_code,s.warehouse_code,s.physical_qty,s.inventory_value,
+                   COALESCE(MAX(t.created_at),s.source_cutoff_at) AS last_movement
+            FROM inventory_month_end_snapshots s
+            LEFT JOIN inventory_transactions t
+              ON t.product_code=s.product_code AND t.warehouse_code=s.warehouse_code
+             AND t.created_at<=s.source_cutoff_at
+            WHERE s.snapshot_date=%s
+            GROUP BY s.id,s.product_code,s.warehouse_code,s.physical_qty,s.inventory_value,s.source_cutoff_at
+            ORDER BY last_movement ASC
+        """,(snapshotDate,))
+        rows=[]
+        for product,warehouse,qty,value,last_movement in cur.fetchall():
+            days=(snapshotDate-last_movement.date()).days if last_movement else 99999
+            bucket="90+" if days>=90 else "60-89" if days>=60 else "30-59" if days>=30 else "0-29"
+            rows.append({"productCode":product,"warehouseCode":warehouse,"qty":qty,"value":value,"daysSinceMovement":days,"bucket":bucket})
+    return {"snapshotDate":snapshotDate.isoformat(),"rows":rows}
