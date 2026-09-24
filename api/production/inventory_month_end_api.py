@@ -97,7 +97,7 @@ def month_end_summary(snapshot_date: date, principal: dict = Depends(require_per
 
 @router.post("/stock-count")
 def record_stock_count(payload: StockCountInput, principal: dict = Depends(require_permission("inventory.adjust"))):
-    with get_db() as conn, conn.cursor() as cur:
+    with _connect() as conn, conn.cursor() as cur:
         cur.execute(
             "SELECT physical_qty, unit_cost FROM inventory_month_end_snapshots WHERE id=%s",
             (payload.snapshot_id,),
