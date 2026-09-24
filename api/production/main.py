@@ -37,6 +37,7 @@ from .inventory_api import router as inventory_router
 from .core_master_api import router as core_master_router
 from .inventory_production_api import router as inventory_production_router
 from .inventory_month_end_api import router as inventory_month_end_router
+from .inventory_profit_first_api import router as inventory_profit_first_router
 from ..orders.fastapi_router import router as order_router, configure_order_center
 from ..orders.order_center import OrderCenter
 from ..orders.postgres_adapter import PostgresOrderRepository, PostgresInventoryGateway
@@ -46,6 +47,7 @@ app.include_router(inventory_router)
 app.include_router(core_master_router)
 app.include_router(inventory_production_router)
 app.include_router(inventory_month_end_router)
+app.include_router(inventory_profit_first_router)
 app.include_router(auth_router)
 app.include_router(production_control_router)
 app.include_router(operation_router)
