@@ -1,6 +1,4 @@
 -- E.Y.T ERP | Inventory valuation and historical-status hardening
--- Moving-average valuation is calculated transaction-by-transaction.
--- RESERVE is allocation, not a physical stock movement.
 BEGIN;
 
 CREATE OR REPLACE FUNCTION inventory_moving_average_at(
@@ -9,8 +7,7 @@ CREATE OR REPLACE FUNCTION inventory_moving_average_at(
     p_cutoff TIMESTAMPTZ
 )
 RETURNS TABLE(on_hand NUMERIC, average_cost NUMERIC, inventory_value NUMERIC)
-LANGUAGE plpgsql
-AS $$
+LANGUAGE plpgsql AS $$
 DECLARE
     r RECORD;
     q NUMERIC := 0;
@@ -42,7 +39,6 @@ BEGIN
             END IF;
         END IF;
     END LOOP;
-
     on_hand := q;
     average_cost := CASE WHEN q > 0 THEN avg ELSE 0 END;
     inventory_value := q * average_cost;
@@ -52,7 +48,7 @@ $$;
 
 CREATE TABLE IF NOT EXISTS inventory_reservation_events (
     id BIGSERIAL PRIMARY KEY,
-    reservation_id BIGINT NOT NULL,
+    reservation_id VARCHAR(120) NOT NULL,
     status VARCHAR(20) NOT NULL,
     quantity NUMERIC(18,6) NOT NULL CHECK (quantity > 0),
     event_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -66,10 +62,10 @@ RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
     IF TG_OP='INSERT' THEN
         INSERT INTO inventory_reservation_events(reservation_id,status,quantity,event_at)
-        VALUES(NEW.id,NEW.status,NEW.quantity,NEW.created_at);
+        VALUES(NEW.id::text,NEW.status,NEW.quantity,NEW.created_at);
     ELSIF TG_OP='UPDATE' AND (NEW.status IS DISTINCT FROM OLD.status OR NEW.quantity IS DISTINCT FROM OLD.quantity) THEN
         INSERT INTO inventory_reservation_events(reservation_id,status,quantity,event_at)
-        VALUES(NEW.id,NEW.status,NEW.quantity,CURRENT_TIMESTAMP);
+        VALUES(NEW.id::text,NEW.status,NEW.quantity,CURRENT_TIMESTAMP);
     END IF;
     RETURN NEW;
 END;
@@ -79,6 +75,14 @@ DROP TRIGGER IF EXISTS trg_inventory_reservation_history ON inventory_reservatio
 CREATE TRIGGER trg_inventory_reservation_history
 AFTER INSERT OR UPDATE ON inventory_reservations
 FOR EACH ROW EXECUTE FUNCTION record_inventory_reservation_event();
+
+INSERT INTO inventory_reservation_events(reservation_id,status,quantity,event_at)
+SELECT r.id::text,r.status,r.quantity,r.created_at
+FROM inventory_reservations r
+WHERE NOT EXISTS (
+    SELECT 1 FROM inventory_reservation_events e
+    WHERE e.reservation_id=r.id::text
+);
 
 CREATE TABLE IF NOT EXISTS finished_goods_release_events (
     id BIGSERIAL PRIMARY KEY,
@@ -114,5 +118,12 @@ DROP TRIGGER IF EXISTS trg_fg_release_history ON finished_goods_releases;
 CREATE TRIGGER trg_fg_release_history
 AFTER INSERT OR UPDATE ON finished_goods_releases
 FOR EACH ROW EXECUTE FUNCTION record_fg_release_event();
+
+INSERT INTO finished_goods_release_events(release_id,release_status,quantity,consumed_qty,event_at)
+SELECT r.id,r.release_status,r.quantity,r.consumed_qty,r.released_at
+FROM finished_goods_releases r
+WHERE NOT EXISTS (
+    SELECT 1 FROM finished_goods_release_events e WHERE e.release_id=r.id
+);
 
 COMMIT;
