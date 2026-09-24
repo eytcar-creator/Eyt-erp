@@ -37,7 +37,7 @@ def create_capital_snapshot(
             """
             SELECT
                 COUNT(*),
-                MAX(status),
+                BOOL_AND(status = 'CLOSED'),
                 COALESCE(SUM(inventory_value), 0),
                 COALESCE(SUM(sellable_qty * unit_cost), 0),
                 COALESCE(SUM(reserved_qty * unit_cost), 0),
@@ -48,14 +48,15 @@ def create_capital_snapshot(
             (snapshotDate,),
         )
         row = cur.fetchone()
-        row_count, snapshot_status, inv, sellable, reserved, qc_hold = row
+        row_count, all_closed, inv, sellable, reserved, qc_hold = row
+        snapshot_status = 'CLOSED' if all_closed else 'NOT_CLOSED'
 
         if not row_count:
             raise HTTPException(
                 404,
                 "Finalized inventory month-end snapshot not found",
             )
-        if snapshot_status != "CLOSED":
+        if not all_closed:
             raise HTTPException(
                 409,
                 "Inventory month-end snapshot must be CLOSED before Profit First linkage",
