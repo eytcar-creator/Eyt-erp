@@ -70,7 +70,7 @@ def create_snapshot(snapshotDate: date, principal: dict = Depends(require_permis
                       WHERE event_at <= %s
                       GROUP BY reservation_id
                     ) latest ON latest.max_id=e.id
-                    JOIN inventory_reservations r ON r.id=e.reservation_id
+                    JOIN inventory_reservations r ON r.id::text=e.reservation_id
                     WHERE r.warehouse_code=%s AND r.product_code=%s
                       AND e.status='RESERVED'
                     """,
