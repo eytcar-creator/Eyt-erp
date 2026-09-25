@@ -23,3 +23,16 @@ def test_capacity_minimums():
     }.items():
         assert quantities in MIGRATION
         assert family in MIGRATION
+
+
+def test_canonical_subfamilies_are_seeded():
+    migration = Path("migrations/030_eyt_master_product_tree_v1_1.sql").read_text(encoding="utf-8")
+    for code in (
+        "STEERING_BALL_JOINT", "AXIAL_JOINT", "FRONT_STABILIZER_LINK",
+        "REAR_STABILIZER_LINK", "CONTROL_ARM_BALL_JOINT",
+        "SMALL_CONTROL_ARM_BUSH", "LARGE_CONTROL_ARM_BUSH",
+        "ENGINE_MOUNT", "SHOCK_ABSORBER_MOUNT", "STEERING_BELLOW",
+        "AXLE_BELLOW", "SLOTTED_RUBBER", "COMPLETE_CONTROL_ARM",
+        "FRONT_SUSPENSION_KIT", "RADIATOR_HEATER_HOSE",
+    ):
+        assert "'" + code + "'" in migration
