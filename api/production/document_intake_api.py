@@ -66,6 +66,7 @@ class ExtractionPayload(BaseModel):
     totalAmount: Decimal | None = None
     confidence: Decimal | None = Field(default=None, ge=0, le=1)
     extractedData: dict = Field(default_factory=dict)
+    lines: list[ExtractionLine] = Field(default_factory=list)
 
 
 class ValidationResult(BaseModel):
