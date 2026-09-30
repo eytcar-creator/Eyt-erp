@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 
 from .auth import audit, require_permission
+from .document_ai_provider import extract_invoice
 
 router = APIRouter(prefix="/api/documents/intake", tags=["document-intake"])
 
@@ -201,6 +202,27 @@ async def intake_document(
         "sha256": sha256,
     }
 
+
+@router.post("/{document_id}/extract-ai")
+def extract_ai(document_id: UUID, request: Request, principal: dict = Depends(require_permission("document.intake"))):
+    with db() as conn:
+        row = conn.execute("SELECT id,storage_path,status FROM document_intake_items WHERE id=%s FOR UPDATE", (document_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Document not found")
+        if row[1] in ("POSTED",):
+            raise HTTPException(409, "Document is already posted")
+        conn.execute("UPDATE document_intake_items SET status=%s WHERE id=%s", ("EXTRACTING", document_id))
+        conn.commit()
+    try:
+        extracted = extract_invoice(row[2])
+    except Exception as exc:
+        with db() as conn:
+            conn.execute("UPDATE document_intake_items SET status=%s,validation_errors=%s WHERE id=%s", ("FAILED", json.dumps([{"code":"AI_EXTRACTION_FAILED","message":str(exc)[:500]}]), document_id))
+            _event(conn, document_id, "AI_EXTRACTION_FAILED", principal["id"], {"error": str(exc)[:500]})
+            conn.commit()
+        raise HTTPException(502, "AI extraction failed") from exc
+    payload = ExtractionPayload.model_validate(extracted)
+    return submit_extraction(document_id, payload, request, principal)
 
 @router.post("/{document_id}/extraction")
 def submit_extraction(
