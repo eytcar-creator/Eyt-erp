@@ -21,6 +21,7 @@ def _connect():
 class InvoiceIn(BaseModel):
     order_no: str
     prepayment_amount: Decimal = Field(default=Decimal("0"), ge=0)
+    due_at: Optional[str] = None
 
 
 class PaymentIn(BaseModel):
@@ -88,10 +89,10 @@ def create_invoice(payload: InvoiceIn):
         invoice_no = f"EYT-INV-{seq:08d}"
         cur.execute("""
             INSERT INTO invoices(invoice_no, sales_order_id, customer_id, subtotal,
-                                  prepayment_amount, receivable_amount, source_type, source_id)
-            VALUES(%s,%s,%s,%s,%s,%s,'SALES_ORDER',%s)
+                                  prepayment_amount, receivable_amount, source_type, source_id, due_at)
+            VALUES(%s,%s,%s,%s,%s,%s,'SALES_ORDER',%s,COALESCE(%s::timestamp, CURRENT_TIMESTAMP))
             RETURNING id
-        """, (invoice_no, order_id, customer_id, subtotal, prepayment, subtotal-prepayment, order_id))
+        """, (invoice_no, order_id, customer_id, subtotal, prepayment, subtotal-prepayment, order_id, payload.due_at))
         invoice_id = cur.fetchone()[0]
         cur.execute("""
             INSERT INTO invoice_items(invoice_id, product_id, quantity, unit_price, unit_cost)
