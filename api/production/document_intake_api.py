@@ -38,6 +38,20 @@ def storage_root() -> Path:
     return root
 
 
+class ExtractionLine(BaseModel):
+    lineNo: int = Field(gt=0)
+    rawDescription: str | None = None
+    productCode: str | None = Field(default=None, max_length=100)
+    quantity: Decimal | None = Field(default=None, gt=0)
+    unit: str | None = Field(default=None, max_length=30)
+    unitPrice: Decimal | None = Field(default=None, ge=0)
+    discountAmount: Decimal = Field(default=Decimal("0"), ge=0)
+    taxAmount: Decimal = Field(default=Decimal("0"), ge=0)
+    lineTotal: Decimal | None = None
+    matchConfidence: Decimal | None = Field(default=None, ge=0, le=1)
+    extractedData: dict = Field(default_factory=dict)
+
+
 class ExtractionPayload(BaseModel):
     documentType: str = Field(min_length=1, max_length=40)
     supplierCode: str | None = Field(default=None, max_length=60)
@@ -84,6 +98,19 @@ def _validate_extraction(conn, payload: ExtractionPayload) -> list[dict]:
         if payload.totalAmount is None:
             errors.append({"code": "TOTAL_REQUIRED", "message": "totalAmount is required"})
 
+        seen = set()
+        calculated = Decimal("0")
+        for line in payload.lines:
+            if line.lineNo in seen:
+                errors.append({"code": "DUPLICATE_LINE_NO", "message": f"Duplicate lineNo: {line.lineNo}"})
+            seen.add(line.lineNo)
+            if line.productCode and not conn.execute("SELECT 1 FROM products WHERE product_code=%s AND is_active", (line.productCode,)).fetchone():
+                errors.append({"code": "UNKNOWN_PRODUCT", "message": f"Unknown productCode: {line.productCode}", "lineNo": line.lineNo})
+            if line.lineTotal is not None:
+                calculated += line.lineTotal
+        if payload.totalAmount is not None and payload.lines and abs(calculated - payload.totalAmount) > Decimal("0.01"):
+            errors.append({"code": "ARITHMETIC_MISMATCH", "message": "Invoice line totals do not reconcile to document total"})
+        
         if payload.invoiceNo and payload.supplierCode:
             duplicate = conn.execute(
                 """SELECT id FROM document_intake_items
