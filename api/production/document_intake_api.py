@@ -237,6 +237,23 @@ def submit_extraction(
                 status, document_id,
             ),
         )
+        conn.execute("DELETE FROM document_intake_line_items WHERE document_id=%s", (document_id,))
+        for line in payload.lines:
+            line_errors = [e for e in errors if e.get("lineNo") == line.lineNo]
+            match_status = "MATCHED" if line.productCode and not line_errors else "REVIEW"
+            conn.execute(
+                """INSERT INTO document_intake_line_items
+                   (document_id,line_no,raw_description,product_code,quantity,unit,unit_price,
+                    discount_amount,tax_amount,line_total,match_status,match_confidence,extracted_data)
+                   VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (document_id,line.lineNo,line.rawDescription,line.productCode,line.quantity,
+                 line.unit,line.unitPrice,line.discountAmount,line.taxAmount,line.lineTotal,
+                 match_status,line.matchConfidence,json.dumps(line.extractedData)),
+            )
+        calculated = sum((x.lineTotal or Decimal("0") for x in payload.lines), Decimal("0"))
+        variance = (calculated - payload.totalAmount) if payload.totalAmount is not None and payload.lines else None
+        conn.execute("UPDATE document_intake_items SET line_count=%s,calculated_lines_total=%s,arithmetic_variance=%s WHERE id=%s",
+                     (len(payload.lines),calculated,variance,document_id))
         _event(conn, document_id, "EXTRACTED", principal["id"], {
             "status": status,
             "error_count": len(errors),
