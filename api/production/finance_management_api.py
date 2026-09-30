@@ -4,6 +4,7 @@ import os
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException
 from .auth import require_permission
+from .finance_reconciliation_rules import evaluate_reconciliation
 
 router = APIRouter(prefix="/api/finance/management", tags=["finance-management"])
 
@@ -49,13 +50,19 @@ def summary(_=Depends(require_permission("finance.read"))):
                       COUNT(*) FILTER (WHERE status='SENT')::int
                FROM finance_notification_outbox"""
         ).fetchone()
+
+    reconciliation = evaluate_reconciliation(
+        customer[0], customer[1], production[0], production[1], funding[0]
+    )
+
     return {
         "receivables": {"total": customer[0], "collected": customer[1], "outstanding": customer[0]-customer[1]},
         "productionPayables": {"total": production[0], "paid": production[1], "outstanding": production[0]-production[1]},
         "funding": {"activeBalance": funding[0]},
         "alerts": {"open": alerts[0], "outstanding": alerts[1], "overdue": alerts[2], "due24h": alerts[3], "due72h": alerts[4]},
         "notifications": {"pending": notifications[0], "processing": notifications[1], "failed": notifications[2], "sent": notifications[3]},
-        "reconciliationStatus": "OK",
+        "reconciliationStatus": reconciliation.status,
+        "reconciliationIssues": list(reconciliation.issues),
     }
 
 
