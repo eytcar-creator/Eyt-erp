@@ -83,6 +83,37 @@ def alerts(status:str=Query("OPEN"),_ = Depends(require_permission("finance.read
       "counterparty":r[4],"dueAt":r[5],"outstanding":r[6],"severity":r[7],
       "status":r[8],"message":r[9]} for r in rows]
 
+@router.get("/summary")
+def summary(_=Depends(require_permission("finance.read"))):
+    with db() as conn:
+        rows=conn.execute("""
+          SELECT alert_type, COUNT(*)::int AS alert_count,
+                 COALESCE(SUM(outstanding_amount),0) AS outstanding
+          FROM finance_settlement_alerts
+          WHERE status='OPEN'
+          GROUP BY alert_type
+        """).fetchall()
+        pending=conn.execute("""
+          SELECT COUNT(*)::int
+          FROM finance_notification_outbox
+          WHERE status='PENDING' AND available_at<=CURRENT_TIMESTAMP
+        """).fetchone()[0]
+    by_type={
+        "DUE_72H":{"count":0,"outstanding":0},
+        "DUE_24H":{"count":0,"outstanding":0},
+        "OVERDUE":{"count":0,"outstanding":0},
+    }
+    for kind,count,outstanding in rows:
+        by_type.setdefault(kind,{"count":0,"outstanding":0})
+        by_type[kind]={"count":count,"outstanding":outstanding}
+    total=sum(v["outstanding"] for v in by_type.values())
+    return {
+        "openAlerts":sum(v["count"] for v in by_type.values()),
+        "totalOutstandingInAlerts":total,
+        "byType":by_type,
+        "pendingNotifications":pending,
+    }
+
 @router.get("/outbox")
 def outbox(limit:int=Query(100,ge=1,le=500),_=Depends(require_permission("finance.read"))):
     with db() as conn:
