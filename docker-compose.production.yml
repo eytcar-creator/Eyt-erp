@@ -57,7 +57,7 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-    command: ["sh", "-c", "while true; do python scripts/run_finance_notification_worker.py --limit 25; sleep 60; done"]
+    command: ["sh", "-c", "while true; do python scripts/run_finance_alert_sync.py; python scripts/run_finance_notification_worker.py --limit 25; sleep 60; done"]
 
   catalog:
     build:
