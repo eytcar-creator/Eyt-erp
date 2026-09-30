@@ -19,6 +19,7 @@ JOIN (VALUES
  ('BUSHINGS','STABILIZER_BUSH','بوش موجگیر','Stabilizer Bushing','FINISHED',30),
  ('BUSHINGS','SELECTED_SUSPENSION_BUSH','سایر بوش‌های منتخب','Selected Suspension Bushing','FINISHED',40),
  ('MOUNTING','ENGINE_MOUNT','دسته موتور','Engine Mount','FINISHED',10),
+ ('MOUNTING','ENGINE_MOUNT_BUSH','پوش دسته‌موتور','Engine Mount Bushing','FINISHED',15),
  ('MOUNTING','TRANSMISSION_MOUNT','دسته گیربکس','Transmission Mount','FINISHED',20),
  ('MOUNTING','SHOCK_ABSORBER_MOUNT','توپی سرکمک','Shock Absorber Mount','FINISHED',30),
  ('BELLOWS_RUBBER','STEERING_BELLOW','گردگیر فرمان','Steering Bellow','FINISHED',10),
