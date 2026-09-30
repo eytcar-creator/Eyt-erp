@@ -47,6 +47,18 @@ services:
       retries: 5
       start_period: 10s
 
+  finance-worker:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set}
+      FINANCE_NOTIFICATION_WORKER_ID: ${FINANCE_NOTIFICATION_WORKER_ID:-finance-worker-01}
+      FINANCE_SETTLEMENT_ALERT_CHANNEL: ${FINANCE_SETTLEMENT_ALERT_CHANNEL:-EMAIL}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ["sh", "-c", "while true; do python scripts/run_finance_notification_worker.py --limit 25; sleep 60; done"]
+
   catalog:
     build:
       context: .
