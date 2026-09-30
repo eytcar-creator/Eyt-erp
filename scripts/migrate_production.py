@@ -32,6 +32,11 @@ MIGRATIONS = [
     ROOT / "database" / "migrations" / "039_automation_event_outbox.sql",
     ROOT / "database" / "migrations" / "040_automation_effect_idempotency.sql",
     ROOT / "database" / "migrations" / "041_crm_activity.sql",
+    ROOT / "database" / "migrations" / "20260930_finance_cash_control_v1.sql",
+    ROOT / "database" / "migrations" / "20260930_finance_settlement_bridge_v1.sql",
+    ROOT / "database" / "migrations" / "20260930_finance_settlement_alerts_v1.sql",
+    ROOT / "database" / "migrations" / "20260930_finance_due_and_notification_outbox_v1.sql",
+    ROOT / "database" / "migrations" / "20260930_finance_notification_worker_hardening_v1.sql",
 ]
 
 def main() -> None:
