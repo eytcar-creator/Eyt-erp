@@ -74,6 +74,15 @@ class ValidationResult(BaseModel):
     errors: list[dict] = Field(default_factory=list)
 
 
+class AutoPostInput(BaseModel):
+    purchaseOrderNo: str = Field(min_length=1, max_length=60)
+    warehouseCode: str = Field(min_length=1, max_length=60)
+    receiptNo: str | None = Field(default=None, max_length=60)
+    notes: str | None = None
+
+
+
+
 def _event(conn, document_id: UUID, event_type: str, actor_id, details: dict):
     conn.execute(
         """INSERT INTO document_intake_events(document_id,event_type,actor_user_id,details)
@@ -294,6 +303,132 @@ def submit_extraction(
         "validation": {"valid": not errors, "errors": errors},
     }
 
+
+
+@router.post("/{document_id}/post", status_code=201)
+def post_document(
+    document_id: UUID,
+    payload: AutoPostInput,
+    request: Request,
+    principal: dict = Depends(require_permission("procurement.receive")),
+):
+    with db() as conn:
+        doc = conn.execute(
+            """SELECT id,status,supplier_code,invoice_no,total_amount
+               FROM document_intake_items WHERE id=%s FOR UPDATE""",
+            (document_id,),
+        ).fetchone()
+        if not doc:
+            raise HTTPException(404, "Document not found")
+        if doc[1] != "READY_TO_POST":
+            raise HTTPException(409, f"Document is not ready to post: {doc[1]}")
+        if not doc[2] or not doc[3]:
+            raise HTTPException(422, "Supplier and invoice number are required")
+
+        order = conn.execute(
+            """SELECT o.id,o.status,o.warehouse_code,s.supplier_code
+               FROM purchase_orders_v1 o
+               JOIN eyt_suppliers s ON s.id=o.supplier_id
+               WHERE o.order_no=%s FOR UPDATE""",
+            (payload.purchaseOrderNo,),
+        ).fetchone()
+        if not order:
+            raise HTTPException(404, "Purchase order not found")
+        if order[1] not in ("approved", "partially_received"):
+            raise HTTPException(409, f"Purchase order is not receivable: {order[1]}")
+        if order[2] != payload.warehouseCode:
+            raise HTTPException(422, "Warehouse does not match purchase order")
+        if order[3] != doc[2]:
+            raise HTTPException(422, "Supplier does not match purchase invoice")
+
+        lines = conn.execute(
+            """SELECT l.product_code,l.quantity,l.unit_price,p.id,i.id,i.quantity,i.unit_price
+               FROM document_intake_line_items l
+               JOIN products p ON p.product_code=l.product_code AND p.is_active
+               JOIN purchase_order_items_v1 i ON i.purchase_order_id=%s AND i.product_id=p.id
+               WHERE l.document_id=%s
+               ORDER BY l.line_no""",
+            (order[0], document_id),
+        ).fetchall()
+        extracted_count = conn.execute(
+            "SELECT COUNT(*) FROM document_intake_line_items WHERE document_id=%s",
+            (document_id,),
+        ).fetchone()[0]
+        if not lines or len(lines) != extracted_count:
+            raise HTTPException(422, "Every invoice line must match an active product on the purchase order")
+
+        receipt_no = payload.receiptNo or doc[3]
+        if conn.execute("SELECT 1 FROM purchase_receipts_v1 WHERE receipt_no=%s", (receipt_no,)).fetchone():
+            raise HTTPException(409, "Receipt number already exists")
+
+        receipt_id = conn.execute(
+            """INSERT INTO purchase_receipts_v1
+               (receipt_no,purchase_order_id,warehouse_code,received_by,notes)
+               VALUES(%s,%s,%s,%s,%s) RETURNING id""",
+            (receipt_no, order[0], payload.warehouseCode, principal["id"], payload.notes or "AUTO_POST from document intake"),
+        ).fetchone()[0]
+
+        for product_code, qty, unit_price, product_id, po_item_id, ordered_qty, po_price in lines:
+            if qty is None:
+                raise HTTPException(422, f"Quantity missing for {product_code}")
+            received = conn.execute(
+                "SELECT COALESCE(SUM(quantity),0) FROM purchase_receipt_items_v1 WHERE purchase_order_item_id=%s",
+                (po_item_id,),
+            ).fetchone()[0]
+            if received + qty > ordered_qty:
+                raise HTTPException(409, f"Over-receipt for {product_code}")
+            cost = unit_price if unit_price is not None else po_price
+            conn.execute(
+                """INSERT INTO purchase_receipt_items_v1
+                   (receipt_id,purchase_order_item_id,product_id,quantity,unit_cost)
+                   VALUES(%s,%s,%s,%s,%s)""",
+                (receipt_id, po_item_id, product_id, qty, cost),
+            )
+            conn.execute(
+                """INSERT INTO inventory_transactions
+                   (document_no,product_code,warehouse_code,quantity,unit,transaction_type,reference_type,reference_id,unit_cost)
+                   VALUES(%s,%s,%s,%s,'PCS','RECEIPT','DOCUMENT_INTAKE',%s,%s)""",
+                (receipt_no, product_code, payload.warehouseCode, qty, str(document_id), cost),
+            )
+
+        totals = conn.execute(
+            """SELECT COUNT(*) FILTER (WHERE x.received < x.ordered), COUNT(*) FILTER (WHERE x.received >= x.ordered)
+               FROM (
+                 SELECT i.quantity ordered,
+                        COALESCE((SELECT SUM(r.quantity) FROM purchase_receipt_items_v1 r WHERE r.purchase_order_item_id=i.id),0) received
+                 FROM purchase_order_items_v1 i WHERE i.purchase_order_id=%s
+               ) x""",
+            (order[0],),
+        ).fetchone()
+        new_status = "partially_received" if totals[0] else "received"
+        conn.execute("UPDATE purchase_orders_v1 SET status=%s WHERE id=%s", (new_status, order[0]))
+        conn.execute(
+            """UPDATE document_intake_items
+               SET status='POSTED',posted_reference_type='PURCHASE_RECEIPT',
+                   posted_reference_id=%s,posted_at=now()
+               WHERE id=%s""",
+            (str(receipt_id), document_id),
+        )
+        _event(conn, document_id, "POSTED", principal["id"], {
+            "receipt_id": str(receipt_id),
+            "receipt_no": receipt_no,
+            "purchase_order_no": payload.purchaseOrderNo,
+        })
+        conn.commit()
+
+    audit(request, principal, "document.intake.posted", document_id, {
+        "receipt_id": str(receipt_id),
+        "receipt_no": receipt_no,
+        "purchase_order_no": payload.purchaseOrderNo,
+    })
+    return {
+        "id": str(document_id),
+        "status": "POSTED",
+        "receiptId": str(receipt_id),
+        "receiptNo": receipt_no,
+        "purchaseOrderNo": payload.purchaseOrderNo,
+        "purchaseOrderStatus": new_status,
+    }
 
 @router.get("/{document_id}")
 def get_document(
