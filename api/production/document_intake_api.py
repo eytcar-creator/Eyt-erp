@@ -402,6 +402,26 @@ def post_document(
         ).fetchone()
         new_status = "partially_received" if totals[0] else "received"
         conn.execute("UPDATE purchase_orders_v1 SET status=%s WHERE id=%s", (new_status, order[0]))
+        payable = conn.execute(
+            """INSERT INTO supplier_payables
+               (supplier_id,purchase_order_id,purchase_receipt_id,document_id,invoice_no,
+                invoice_date,due_date,currency,invoice_amount,payment_terms,created_by)
+               SELECT s.id,%s,%s,%s,%s,d.invoice_date,d.due_date,d.currency,d.total_amount,
+                      d.extracted_data->>'paymentTerms',%s
+               FROM document_intake_items d
+               JOIN eyt_suppliers s ON s.supplier_code=d.supplier_code
+               WHERE d.id=%s
+               RETURNING id""",
+            (order[0],receipt_id,document_id,doc[3],principal["id"],document_id),
+        ).fetchone()
+        if not payable:
+            raise HTTPException(422, "Supplier payable could not be created")
+        conn.execute(
+            """INSERT INTO supplier_payable_events
+               (payable_id,event_type,actor_user_id,amount,details)
+               VALUES(%s,'CREATED',%s,%s,%s)""",
+            (payable[0],principal["id"],doc[4],json.dumps({"source":"DOCUMENT_INTAKE","document_id":str(document_id),"receipt_id":str(receipt_id)})),
+        )
         conn.execute(
             """UPDATE document_intake_items
                SET status='POSTED',posted_reference_type='PURCHASE_RECEIPT',
@@ -427,6 +447,7 @@ def post_document(
         "receiptId": str(receipt_id),
         "receiptNo": receipt_no,
         "purchaseOrderNo": payload.purchaseOrderNo,
+        "supplierPayableId": str(payable[0]),
         "purchaseOrderStatus": new_status,
     }
 
