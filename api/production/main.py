@@ -15,6 +15,7 @@ from .finance_router import router as finance_router
 from .finance_cash_control_api import router as finance_cash_control_router
 from .finance_reconciliation_api import router as finance_reconciliation_router
 from .finance_alerts_api import router as finance_alerts_router
+from .finance_management_api import router as finance_management_router
 from .commercial_api import router as commercial_router
 from .inventory_flow_api import router as inventory_flow_router
 from .product_master_api import router as product_master_router
@@ -64,6 +65,7 @@ app.include_router(finance_router)
 app.include_router(finance_cash_control_router)
 app.include_router(finance_reconciliation_router)
 app.include_router(finance_alerts_router)
+app.include_router(finance_management_router)
 app.include_router(commercial_router)
 app.include_router(inventory_flow_router)
 app.include_router(product_master_router)
