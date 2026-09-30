@@ -13,6 +13,7 @@ from .sales_api import router as sales_router
 from .procurement_api import router as procurement_router
 from .finance_router import router as finance_router
 from .finance_cash_control_api import router as finance_cash_control_router
+from .finance_reconciliation_api import router as finance_reconciliation_router
 from .commercial_api import router as commercial_router
 from .inventory_flow_api import router as inventory_flow_router
 from .product_master_api import router as product_master_router
@@ -60,6 +61,7 @@ app.include_router(sales_router)
 app.include_router(procurement_router)
 app.include_router(finance_router)
 app.include_router(finance_cash_control_router)
+app.include_router(finance_reconciliation_router)
 app.include_router(commercial_router)
 app.include_router(inventory_flow_router)
 app.include_router(product_master_router)
