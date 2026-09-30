@@ -3,6 +3,7 @@ import os
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException
 from .auth import require_permission
+from .finance_reconciliation_rules import evaluate_reconciliation
 
 router = APIRouter(prefix="/api/finance/reconciliation", tags=["finance-reconciliation"])
 
@@ -22,13 +23,18 @@ def summary(_=Depends(require_permission("finance.read"))):
             COALESCE(SUM(paid_amount),0) FROM production_service_payables""").fetchone()
         funding=conn.execute("""SELECT COALESCE(SUM(current_balance),0)
             FROM finance_funding_sources WHERE is_active""").fetchone()
-        return {
-            "customerReceivable": customer[0],
-            "customerCollected": customer[1],
-            "customerOutstanding": customer[0]-customer[1],
-            "productionPayable": production[0],
-            "productionPaid": production[1],
-            "productionOutstanding": production[0]-production[1],
-            "activeFundingBalance": funding[0],
-            "reconciliationStatus": "OK"
-        }
+
+    result = evaluate_reconciliation(
+        customer[0], customer[1], production[0], production[1], funding[0]
+    )
+    return {
+        "customerReceivable": customer[0],
+        "customerCollected": customer[1],
+        "customerOutstanding": customer[0]-customer[1],
+        "productionPayable": production[0],
+        "productionPaid": production[1],
+        "productionOutstanding": production[0]-production[1],
+        "activeFundingBalance": funding[0],
+        "reconciliationStatus": result.status,
+        "issues": list(result.issues),
+    }
