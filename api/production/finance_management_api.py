@@ -23,77 +23,52 @@ def summary(_=Depends(require_permission("finance.read"))):
                       COALESCE(SUM((SELECT SUM(amount)
                                     FROM payment_allocations a
                                     WHERE a.invoice_id=i.id)),0)
-               FROM invoices i
-               WHERE i.status <> 'VOID'"""
+               FROM invoices i WHERE i.status <> 'VOID'"""
         ).fetchone()
-
         production = conn.execute(
             """SELECT COALESCE(SUM(service_amount+transport_amount),0),
                       COALESCE(SUM(paid_amount),0)
                FROM production_service_payables"""
         ).fetchone()
-
         funding = conn.execute(
             """SELECT COALESCE(SUM(current_balance),0)
-               FROM finance_funding_sources
-               WHERE is_active"""
+               FROM finance_funding_sources WHERE is_active"""
         ).fetchone()
-
         alerts = conn.execute(
-            """SELECT
-                 COUNT(*) FILTER (WHERE status='OPEN')::int,
-                 COALESCE(SUM(outstanding_amount)
-                          FILTER (WHERE status='OPEN'),0),
-                 COUNT(*) FILTER (
-                   WHERE status='OPEN' AND alert_type='OVERDUE'
-                 )::int,
-                 COUNT(*) FILTER (
-                   WHERE status='OPEN' AND alert_type='DUE_24H'
-                 )::int,
-                 COUNT(*) FILTER (
-                   WHERE status='OPEN' AND alert_type='DUE_72H'
-                 )::int
+            """SELECT COUNT(*) FILTER (WHERE status='OPEN')::int,
+                      COALESCE(SUM(outstanding_amount) FILTER (WHERE status='OPEN'),0),
+                      COUNT(*) FILTER (WHERE status='OPEN' AND alert_type='OVERDUE')::int,
+                      COUNT(*) FILTER (WHERE status='OPEN' AND alert_type='DUE_24H')::int,
+                      COUNT(*) FILTER (WHERE status='OPEN' AND alert_type='DUE_72H')::int
                FROM finance_settlement_alerts"""
         ).fetchone()
-
         notifications = conn.execute(
-            """SELECT
-                 COUNT(*) FILTER (WHERE status='PENDING')::int,
-                 COUNT(*) FILTER (WHERE status='PROCESSING')::int,
-                 COUNT(*) FILTER (WHERE status='FAILED')::int,
-                 COUNT(*) FILTER (WHERE status='SENT')::int
+            """SELECT COUNT(*) FILTER (WHERE status='PENDING')::int,
+                      COUNT(*) FILTER (WHERE status='PROCESSING')::int,
+                      COUNT(*) FILTER (WHERE status='FAILED')::int,
+                      COUNT(*) FILTER (WHERE status='SENT')::int
                FROM finance_notification_outbox"""
         ).fetchone()
-
-    customer_receivable, customer_collected = customer
-    production_payable, production_paid = production
-
     return {
-        "receivables": {
-            "total": customer_receivable,
-            "collected": customer_collected,
-            "outstanding": customer_receivable - customer_collected,
-        },
-        "productionPayables": {
-            "total": production_payable,
-            "paid": production_paid,
-            "outstanding": production_payable - production_paid,
-        },
-        "funding": {
-            "activeBalance": funding[0],
-        },
-        "alerts": {
-            "open": alerts[0],
-            "outstanding": alerts[1],
-            "overdue": alerts[2],
-            "due24h": alerts[3],
-            "due72h": alerts[4],
-        },
-        "notifications": {
-            "pending": notifications[0],
-            "processing": notifications[1],
-            "failed": notifications[2],
-            "sent": notifications[3],
-        },
+        "receivables": {"total": customer[0], "collected": customer[1], "outstanding": customer[0]-customer[1]},
+        "productionPayables": {"total": production[0], "paid": production[1], "outstanding": production[0]-production[1]},
+        "funding": {"activeBalance": funding[0]},
+        "alerts": {"open": alerts[0], "outstanding": alerts[1], "overdue": alerts[2], "due24h": alerts[3], "due72h": alerts[4]},
+        "notifications": {"pending": notifications[0], "processing": notifications[1], "failed": notifications[2], "sent": notifications[3]},
         "reconciliationStatus": "OK",
     }
+
+
+@router.get("/funding-sources")
+def funding_sources(_=Depends(require_permission("finance.read"))):
+    with db() as conn:
+        rows = conn.execute(
+            """SELECT code,name,source_type,current_balance,currency,is_active
+               FROM finance_funding_sources
+               ORDER BY is_active DESC,name"""
+        ).fetchall()
+    return [
+        {"code": r[0], "name": r[1], "type": r[2], "balance": r[3],
+         "currency": r[4], "active": r[5]}
+        for r in rows
+    ]
