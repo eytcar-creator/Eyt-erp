@@ -353,3 +353,89 @@ def ceo_dashboard(days: int = 30, _=Depends(require_permission("finance.read")))
         "top_customers": top_customers,
         "sales_trend": trend,
     }
+
+
+@router.get("/product-tree")
+def product_tree(_=Depends(require_permission("production.read"))):
+    """Return the canonical EYT product family/subfamily tree."""
+    db = _db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="PostgreSQL adapter is not configured")
+    with db.cursor() as cur:
+        cur.execute("""
+            SELECT f.id, f.code, f.name_fa, f.name_en, f.source_scope, f.status,
+                   s.id AS subfamily_id, s.code AS subfamily_code,
+                   s.name_fa AS subfamily_name_fa, s.name_en AS subfamily_name_en,
+                   s.default_product_type
+            FROM eyt_product_family f
+            LEFT JOIN eyt_product_subfamily s ON s.family_id=f.id AND s.status='ACTIVE'
+            WHERE f.status='ACTIVE'
+            ORDER BY f.sort_order, s.sort_order, s.code
+        """)
+        rows = cur.fetchall()
+        cols = [d.name for d in cur.description]
+    tree = {}
+    for row in rows:
+        item = dict(zip(cols, row))
+        family = tree.setdefault(str(item["id"]), {
+            "id": str(item["id"]), "code": item["code"], "nameFa": item["name_fa"],
+            "nameEn": item["name_en"], "sourceScope": item["source_scope"],
+            "subfamilies": []
+        })
+        if item["subfamily_id"]:
+            family["subfamilies"].append({
+                "id": str(item["subfamily_id"]), "code": item["subfamily_code"],
+                "nameFa": item["subfamily_name_fa"], "nameEn": item["subfamily_name_en"],
+                "defaultProductType": item["default_product_type"]
+            })
+    return list(tree.values())
+
+
+@router.get("/capacity/{family_code}")
+def capacity_policy(family_code: str, _=Depends(require_permission("production.read"))):
+    """Return the active annual capacity policy for a product family."""
+    db = _db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="PostgreSQL adapter is not configured")
+    with db.cursor() as cur:
+        cur.execute("""
+            SELECT f.code, f.name_fa, p.annual_min_qty, p.annual_normal_max_qty,
+                   p.minimum_mandatory, p.confirmed_order_override_allowed,
+                   p.effective_from, p.effective_to, p.status
+            FROM eyt_product_capacity_policy p
+            JOIN eyt_product_family f ON f.id=p.family_id
+            WHERE f.code=%s AND p.status='ACTIVE'
+              AND p.effective_from <= CURRENT_DATE
+              AND (p.effective_to IS NULL OR p.effective_to >= CURRENT_DATE)
+            ORDER BY p.effective_from DESC LIMIT 1
+        """, (family_code,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Capacity policy not found")
+        cols = [d.name for d in cur.description]
+    return dict(zip(cols, row))
+
+
+@router.get("/capacity/{family_code}/decision")
+def capacity_decision(
+    family_code: str,
+    planned_qty: Decimal,
+    confirmed_customer_order: bool = False,
+    _=Depends(require_permission("production.read")),
+):
+    """Evaluate annual plan against the canonical family capacity policy."""
+    if planned_qty < 0:
+        raise HTTPException(status_code=400, detail="planned_qty must be >= 0")
+    db = _db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="PostgreSQL adapter is not configured")
+    with db.cursor() as cur:
+        cur.execute("SELECT eyt_capacity_decision(%s,%s,%s)",
+                    (family_code, planned_qty, confirmed_customer_order))
+        decision = cur.fetchone()[0]
+    return {
+        "familyCode": family_code,
+        "plannedQty": planned_qty,
+        "confirmedCustomerOrder": confirmed_customer_order,
+        "decision": decision,
+    }
