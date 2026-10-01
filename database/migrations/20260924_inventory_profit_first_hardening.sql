@@ -28,11 +28,6 @@ SELECT
     s.approved_variance_value,
     s.inventory_value_change,
     s.capital_change_pct,
-    s.inventory_snapshot_status,
-    s.sales_period_start,
-    s.sales_period_end,
-    s.sales_period_days,
-    s.valuation_method,
     CASE
         WHEN COALESCE(p.sales, 0) > 0
         THEN ROUND(100 * s.inventory_value / NULLIF(p.sales, 0), 2)
@@ -42,7 +37,12 @@ SELECT
     COALESCE(p.collected_cash, 0) AS collected_cash,
     COALESCE(p.outstanding_receivable, 0) AS outstanding_receivable,
     COALESCE(p.gross_profit, 0) AS gross_profit,
-    COALESCE(p.operational_cash_contribution, 0) AS operational_cash_contribution
+    COALESCE(p.operational_cash_contribution, 0) AS operational_cash_contribution,
+    s.inventory_snapshot_status,
+    s.sales_period_start,
+    s.sales_period_end,
+    s.sales_period_days,
+    s.valuation_method
 FROM inventory_capital_snapshots s
 LEFT JOIN LATERAL (
     SELECT
