@@ -113,8 +113,8 @@ def test_ario_2000_end_to_end_profit_flow():
                     INSERT INTO inventory_transactions
                       (document_no,warehouse_code,product_code,quantity,unit,transaction_type,
                        reference_type,reference_id,unit_cost)
-                    VALUES (%s,'MAIN',2000,'PCS','CONSUMPTION','PRODUCTION',%s,%s)
-                """, (f"CONS-{name}-{suffix}", order_no, cost))
+                    VALUES (%s,'MAIN',2000,'PCS','CONSUMPTION','PRODUCTION',%s,%s,%s)
+                """, (f"CONS-{name}-{suffix}", order_no, order_no, cost))
                 cur.execute("""
                     INSERT INTO production_material_movements
                       (production_order_id,material_code,warehouse_code,quantity,movement_type,
