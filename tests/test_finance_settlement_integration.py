@@ -143,6 +143,7 @@ def test_finance_settlement_alert_and_notification_flow():
                 cur.execute("DELETE FROM invoices WHERE id=%s", (invoice_id,))
                 cur.execute("DELETE FROM sales_order_items WHERE sales_order_id=%s", (order_id,))
                 cur.execute("DELETE FROM sales_orders WHERE id=%s", (order_id,))
+                cur.execute("DELETE FROM purchase_history WHERE product_id=%s", (product_id,))
                 cur.execute("DELETE FROM products WHERE id=%s", (product_id,))
                 cur.execute("DELETE FROM customers WHERE id=%s", (customer_id,))
                 conn.commit()
