@@ -83,7 +83,7 @@ jobs:
         run: |
           set -euo pipefail
           psql -v ON_ERROR_STOP=1 -c "SELECT table_schema, table_name, column_name, data_type, udt_name, column_default FROM information_schema.columns WHERE table_schema='public' AND table_name='inventory_transactions' AND column_name='unit';"
-          psql -v ON_ERROR_STOP=1 -c "DO \\\$\\$ BEGIN IF (SELECT data_type FROM information_schema.columns WHERE table_schema='public' AND table_name='inventory_transactions' AND column_name='unit') <> 'character varying' THEN RAISE EXCEPTION 'inventory_transactions.unit is not VARCHAR before tests'; END IF; END \\\$\\$;"
+          psql -v ON_ERROR_STOP=1 -c "DO \$\$ BEGIN IF (SELECT data_type FROM information_schema.columns WHERE table_schema='public' AND table_name='inventory_transactions' AND column_name='unit') <> 'character varying' THEN RAISE EXCEPTION 'inventory_transactions.unit is not VARCHAR before tests'; END IF; END \$\$;"
 
       - name: Preflight Ario integration test
         run: python -m pytest tests/test_ario_2000_e2e.py -q
