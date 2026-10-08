@@ -90,7 +90,7 @@ jobs:
           done
           echo "ERP readiness did not become healthy in time"
           docker compose -f docker-compose.production.yml ps
-          docker compose -f docker-compose.production.yml logs --no-color api db catalog
+          docker compose -f docker-compose.production.yml logs --no-color migrate api db catalog
           exit 1
       - name: Check customer catalog portal
         run: curl --fail --silent --show-error http://localhost:8080/ | grep -q "پرتال مشتری E.Y.T"
