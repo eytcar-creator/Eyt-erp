@@ -33,6 +33,7 @@ from .profit_dashboard_api import router as profit_dashboard_router
 from .performance_output_api import router as performance_output_router
 from .performance_control_api import router as performance_control_router
 from .strategy_action_api import router as strategy_action_router
+from .innovation_api import router as innovation_router
 from .strategy_users_api import router as strategy_users_router
 from .strategy_notification_api import router as strategy_notification_router
 from .crm_network_api import router as crm_network_router
@@ -62,7 +63,7 @@ for router in (
     purchase_receiving_router, qc_router, profit_router, payable_router,
     order_router, channel_intake_router, ai_order_agent_router, customer_portal_router, customer_market_router,
     repeat_purchase_router, cash_collection_router, profit_dashboard_router,
-    performance_output_router, performance_control_router, strategy_action_router,
+    performance_output_router, performance_control_router, strategy_action_router, innovation_router,
     strategy_users_router, strategy_notification_router, crm_network_router,
     automation_router, org_management_router,
 ):
