@@ -130,6 +130,7 @@ def receive_intake(
                 if not cur.fetchone():
                     errors.append(f"customer not found: {payload.customer_id}")
 
+            seen_product_ids: set[str] = set()
             for item in payload.items:
                 product_id = item.product_id
                 if product_id:
@@ -151,13 +152,18 @@ def receive_intake(
                         f"active product not found: {item.product_id or item.product_code}"
                     )
                 else:
-                    resolved.append(
-                        {
-                            "product_id": str(product[0]),
-                            "product_code": product[1],
-                            "quantity": str(item.quantity),
-                        }
-                    )
+                    resolved_product_id = str(product[0])
+                    if resolved_product_id in seen_product_ids:
+                        errors.append(f"duplicate product line: {product[1]}")
+                    else:
+                        seen_product_ids.add(resolved_product_id)
+                        resolved.append(
+                            {
+                                "product_id": resolved_product_id,
+                                "product_code": product[1],
+                                "quantity": str(item.quantity),
+                            }
+                        )
 
             status = "PENDING_CONFIRMATION" if not errors and payload.items else "RECEIVED"
             # Persist resolved product IDs so confirmation never has to guess again.
@@ -274,7 +280,9 @@ def confirm_intake(
                 raise HTTPException(status_code=422, detail=f"unsupported order channel: {row[1]}") from exc
 
             payment_raw = str(data.get("payment_mode") or "CASH").upper()
-            payment_type = PaymentType.CREDIT if payment_raw == PaymentType.CREDIT.value else PaymentType.CASH
+            if payment_raw not in {PaymentType.CASH.value, PaymentType.CREDIT.value}:
+                raise HTTPException(status_code=422, detail="payment_mode must be CASH or CREDIT")
+            payment_type = PaymentType(payment_raw)
             warehouse_code = str(data.get("warehouse_code") or "MAIN")
 
             gate_result = gate.evaluate(
