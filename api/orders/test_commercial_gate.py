@@ -16,7 +16,6 @@ def test_cash_gate_passes_when_stock_is_available():
                 ("c1", "Customer", True),
                 ("MAIN",),
                 ("p1", "P1", "3K000", "SKU", "بوش طبق", 100, 40, True),
-                ("unused-master",),
                 (50,),
                 (0,),
             ]
