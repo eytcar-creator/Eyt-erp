@@ -191,6 +191,7 @@ def receive_intake(
         "intake_id": intake_id,
         "order_no": None,
         "status": status,
+        "proposal_fingerprint": proposal_fingerprint,
         "customer_match": bool(payload.customer_id and not any("customer" in e for e in errors)),
         "product_matches": resolved,
         "validation_errors": errors,
