@@ -47,6 +47,7 @@ from .document_intake_api import router as document_intake_router
 from ..orders.fastapi_router import router as order_router, configure_order_center
 from ..orders.channel_intake_api import router as channel_intake_router
 from ..orders.ai_order_agent_api import router as ai_order_agent_router
+from ..orders.commercial_gate_api import router as commercial_gate_router
 from ..orders.order_center import OrderCenter
 from ..orders.postgres_adapter import PostgresOrderRepository, PostgresInventoryGateway
 
@@ -60,7 +61,7 @@ for router in (
     finance_management_router, commercial_router, inventory_flow_router,
     product_master_router, vehicle_master_router, public_catalog_router,
     purchase_receiving_router, qc_router, profit_router, payable_router,
-    order_router, channel_intake_router, ai_order_agent_router, customer_portal_router, customer_market_router,
+    order_router, channel_intake_router, ai_order_agent_router, commercial_gate_router, customer_portal_router, customer_market_router,
     repeat_purchase_router, cash_collection_router, profit_dashboard_router,
     performance_output_router, performance_control_router, strategy_action_router,
     strategy_users_router, strategy_notification_router, crm_network_router,
