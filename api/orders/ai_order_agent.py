@@ -34,17 +34,15 @@ class AIOrderAgent:
         # Supports common commercial formats such as:
         # "JAC S5 3K000 x 20", "3K000 20 عدد", "کد 3K000 تعداد 20"
         patterns = (
-            r"(?P<code>[A-Za-z0-9][A-Za-z0-9._-]{2,})\s*(?:x|×|عدد|pcs|تعداد)\s*(?P<qty>\d+(?:\.\d+)?)",
-            r"(?:کد|sku|code)\s*[:#-]?\s*(?P<code>[A-Za-z0-9][A-Za-z0-9._-]{2,})\s*(?:تعداد|qty|x|×)\s*(?P<qty>\d+(?:\.\d+)?)",
+            r"(?P<code>[A-Za-z0-9][A-Za-z0-9._-]{2,})\s*(?:x|×|عدد|pcs|تعداد|quantity|qty)\s*(?P<qty>\d+(?:\.\d+)?)",
+            r"(?:کد|sku|code)\s*[:#-]?\s*(?P<code>[A-Za-z0-9][A-Za-z0-9._-]{2,})\s*(?:تعداد|quantity|qty|x|×)\s*(?P<qty>\d+(?:\.\d+)?)",
         )
-        spans: list[tuple[int, int]] = []
         for pattern in patterns:
             for m in re.finditer(pattern, clean, flags=re.IGNORECASE):
                 code = m.group("code")
                 qty = Decimal(m.group("qty"))
                 if qty > 0:
                     items.append(ProposedItem(code, qty, 0.96))
-                    spans.append(m.span())
 
         if not items:
             missing.append("items")
