@@ -1,10 +1,28 @@
-# E.Y.T Order Center & Channel Intake v1
+# E.Y.T One — Unified Commerce & Order Platform
+
+## تعریف پروژه
+**E.Y.T One** لایه مرکزی سفارش‌گیری، فروش و اتصال کانال‌های E.Y.T است.
+
+این پروژه از ابتدا فقط «ثبت سفارش» نیست. هدف، ساخت یک هسته واحد برای اتصال کانال‌های فروش به Customer Hub، Order Center و ERP است تا اطلاعات سفارش، مشتری، محصول، موجودی، تولید، مالی، ارسال و وصول در یک زنجیره قابل ردیابی حرکت کنند.
+
+> **Current Module:** E.Y.T One — Order Center
+
+## معماری نام‌گذاری
+- **E.Y.T One** — پلتفرم مرکزی تجارت و سفارش
+- **Channel Hub** — دریافت و مدیریت ورودی کانال‌ها
+- **Customer Hub** — شناسایی و یکپارچه‌سازی مشتری
+- **Order Center** — هسته سفارش‌گیری و چرخه سفارش
+- **Sales Center** — فروش، قیمت، اعتبار و پیشنهاد
+- **Production Link** — اتصال سفارش به تولید
+- **Inventory Link** — موجودی، رزرو و تخصیص
+- **Finance Link** — پرداخت، بدهی، اعتبار و تسویه
+- **Tracking** — رهگیری وضعیت سفارش و تحویل
 
 ## هدف
 تمام سفارش‌های B2B، نمایندگان، فروش حضوری، سایت و پیام‌رسان‌های متصل باید به یک Order Center مرکزی وارد شوند. کانال فقط منبع ورود است و مالک سفارش نیست.
 
 ## جریان
-Channel -> Communication Hub -> Order Intake -> Customer/Product Resolution -> Validation -> Customer Confirmation -> Order Center -> ERP
+Channel -> Channel Hub -> Order Intake -> Customer/Product Resolution -> Validation -> Customer Confirmation -> Order Center -> ERP
 
 ## کانال‌ها
 web, b2b, representative, sales_agent, phone, bale, whatsapp, instagram, other
@@ -56,7 +74,7 @@ DRAFT -> PENDING_CONFIRMATION -> CONFIRMED -> ALLOCATED -> BACKORDER/PRODUCTION 
 - اتصال پیام‌رسان فقط از API/Webhook رسمی و مجاز
 
 ## اتصال به ERP
-Order Center باید با موجودی، اعتبار مشتری، مالی، تولید، QC، انبار، ارسال و وصول از طریق API داخلی ارتباط داشته باشد.
+E.Y.T One باید با موجودی، اعتبار مشتری، مالی، تولید، QC، انبار، ارسال و وصول از طریق API داخلی ارتباط داشته باشد.
 
 ## فازهای اجرا
 1. Order Center API و مدل داده
@@ -70,3 +88,6 @@ Order Center باید با موجودی، اعتبار مشتری، مالی، �
 
 ## اصل معماری
 هیچ کانالی نباید منطق مستقل سفارش‌گیری خود را داشته باشد. همه کانال‌ها به قرارداد واحد Intake متصل می‌شوند.
+
+## اصل توسعه
+E.Y.T One باید به‌صورت ماژولار توسعه داده شود؛ اضافه شدن کانال جدید نباید باعث ایجاد منطق سفارش‌گیری جدید شود. کانال فقط Adapter است و Order Center منبع حقیقت سفارش است.
