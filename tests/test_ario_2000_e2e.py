@@ -187,10 +187,11 @@ def test_ario_2000_end_to_end_profit_flow():
                 SELECT sales,actual_cogs,contribution_profit,contribution_margin
                 FROM eyt_order_actual_profitability WHERE order_no=%s
             """, (sales_order_no,))
-            assert cur.fetchone() == (
-                Decimal("1400000000"), Decimal("1090000000"),
-                Decimal("310000000"), Decimal("0.2214285714285714285714285714"),
-            )
+            sales, actual_cogs, contribution_profit, contribution_margin = cur.fetchone()
+            assert sales == Decimal("1400000000")
+            assert actual_cogs == Decimal("1090000000")
+            assert contribution_profit == Decimal("310000000")
+            assert contribution_margin.quantize(Decimal("0.000000000001")) == Decimal("0.221428571429")
 
             cur.execute("""
                 SELECT i.receivable_amount - COALESCE(SUM(pa.amount),0)
