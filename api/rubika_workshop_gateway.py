@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException, Request
 
 from api.rubika_workshop_extraction import extract_message
+from api.rubika_workshop_matching import build_draft
 
 router = APIRouter(
     prefix="/api/v1/integrations/rubika/workshop",
