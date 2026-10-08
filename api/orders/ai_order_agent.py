@@ -23,28 +23,23 @@ class OrderProposal:
     needs_confirmation: bool = True
 
 
-# Conservative parser: it proposes structure only. It never creates or confirms
-# an order. Ambiguity is deliberately surfaced to the caller.
 class AIOrderAgent:
+    """Conservative proposal parser. It never creates or confirms an order."""
+
     def propose(self, text: str, customer_id: str | None = None) -> dict[str, Any]:
         clean = " ".join((text or "").strip().split())
         missing: list[str] = []
         items: list[ProposedItem] = []
 
-        # Supports common commercial formats such as:
-        # "JAC S5 3K000 x 20", "3K000 20 عدد", "کد 3K000 تعداد 20"
         patterns = (
-            r"(?P<code>[A-Za-z0-9][A-Za-z0-9._-]{2,})\s*(?:x|×|عدد|pcs|تعداد)\s*(?P<qty>\d+(?:\.\d+)?)",
-            r"(?:کد|sku|code)\s*[:#-]?\s*(?P<code>[A-Za-z0-9][A-Za-z0-9._-]{2,})\s*(?:تعداد|qty|x|×)\s*(?P<qty>\d+(?:\.\d+)?)",
+            r"(?P<code>[A-Za-z0-9][A-Za-z0-9._-]{2,})\s*(?:x|×|عدد|pcs|تعداد|quantity|qty)\s*(?P<qty>\d+(?:\.\d+)?)",
+            r"(?:کد|sku|code)\s*[:#-]?\s*(?P<code>[A-Za-z0-9][A-Za-z0-9._-]{2,})\s*(?:تعداد|quantity|qty|x|×)\s*(?P<qty>\d+(?:\.\d+)?)",
         )
-        spans: list[tuple[int, int]] = []
         for pattern in patterns:
             for m in re.finditer(pattern, clean, flags=re.IGNORECASE):
-                code = m.group("code")
                 qty = Decimal(m.group("qty"))
                 if qty > 0:
-                    items.append(ProposedItem(code, qty, 0.96))
-                    spans.append(m.span())
+                    items.append(ProposedItem(m.group("code"), qty, 0.96))
 
         if not items:
             missing.append("items")
