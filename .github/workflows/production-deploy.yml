@@ -1,0 +1,48 @@
+name: E.Y.T Production Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: eyt-production-deploy
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy ERP to production
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate production compose
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          DATABASE_URL: postgresql://eyt_user:${{ secrets.POSTGRES_PASSWORD }}@db:5432/eyt_erp
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          BOOTSTRAP_SECRET: ${{ secrets.BOOTSTRAP_SECRET }}
+        run: docker compose -f docker-compose.production.yml config
+
+      - name: Verify deployment configuration
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOY_HOST"
+          test -n "$DEPLOY_USER"
+          test -n "$DEPLOY_SSH_KEY"
+          echo "Deployment secrets are configured."
+
+      - name: Deployment placeholder
+        run: |
+          echo "Deployment transport is intentionally not executed until the production SSH contract is configured."
+          echo "Required secrets: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY."
+          echo "Required runtime secret on the server: RUBIKA_WORKSHOP_WEBHOOK_SECRET."
