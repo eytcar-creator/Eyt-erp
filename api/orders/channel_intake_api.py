@@ -339,7 +339,7 @@ def confirm_intake(
         notes=f"E.Y.T One intake {intake_id}",
     ))
     order_no = created["order_no"]
-    if created.get("status") not in {"PENDING_CONFIRMATION", "CONFIRMED"}:
+    if created.get("status") in {"RESERVED", "PREPARING", "READY_TO_SHIP", "SHIPPED", "DELIVERED", "FULFILLED"}:
         confirmed = created
     else:
         confirmed = order_api.order_center.confirm(order_no)
