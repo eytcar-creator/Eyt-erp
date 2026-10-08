@@ -39,6 +39,7 @@ MIGRATIONS = [
     ROOT / "database" / "20260930_finance_notification_worker_hardening_v1.sql",
     ROOT / "database" / "20261001_inventory_unit_type_hardening.sql",
     ROOT / "database" / "20261001z_inventory_unit_contract_v2.sql",
+    ROOT / "database" / "migrations" / "042_eyt_one_channel_intake.sql",
 ]
 
 def main() -> None:
