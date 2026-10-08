@@ -3,7 +3,7 @@ from api.production.main import app
 
 
 def test_public_catalog_routes_are_defined():
-    paths = {route.path for route in public_catalog_router.routes}
+    paths = {getattr(route, "path", None) for route in public_catalog_router.routes}
     assert "/api/public/catalog/products" in paths
     assert "/api/public/catalog/products/{sku}" in paths
 
@@ -16,6 +16,6 @@ def test_public_catalog_module_is_read_only():
 
 
 def test_public_catalog_router_is_registered_in_production_app():
-    paths = {route.path for route in app.routes}
+    paths = {getattr(route, "path", None) for route in app.routes}
     assert "/api/public/catalog/products" in paths
     assert "/api/public/catalog/products/{sku}" in paths
