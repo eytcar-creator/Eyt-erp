@@ -36,6 +36,7 @@ services:
       ACCESS_TOKEN_MINUTES: ${ACCESS_TOKEN_MINUTES:-15}
       REFRESH_TOKEN_DAYS: ${REFRESH_TOKEN_DAYS:-30}
       CHANNEL_INTAKE_SECRET: ${CHANNEL_INTAKE_SECRET:-}
+      RUBIKA_WORKSHOP_WEBHOOK_SECRET: ${RUBIKA_WORKSHOP_WEBHOOK_SECRET:?RUBIKA_WORKSHOP_WEBHOOK_SECRET must be set}
     depends_on:
       migrate:
         condition: service_completed_successfully
