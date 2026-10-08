@@ -6,4 +6,4 @@ def test_normalizes_persian_arabic_variants():
 
 
 def test_normalizes_spaces_and_punctuation():
-    assert _norm("JAC-S5 / 3K000") == "jac-s53k000"
+    assert _norm("JAC-S5 / 3K000") == "jacs53k000"
