@@ -48,7 +48,7 @@ def post_approved_production(cur: Any, message_id: str, extracted: dict[str, Any
         return {"status": existing[2], "documentNo": existing[0], "referenceId": existing[1], "duplicate": True}
 
     cur.execute("""SELECT id, product_code, product_name_fa, is_active
-                   FROM eyt_product_master WHERE id=%s""", (product["product_id"],))
+                   FROM eyt_product_master WHERE product_code=%s""", (product["product_code"],))
     master = cur.fetchone()
     if not master or not master[3]:
         raise HTTPException(422, "Matched Product Master is not active")
