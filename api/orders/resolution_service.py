@@ -20,7 +20,7 @@ def _norm(value: str | None) -> str:
     value = value.translate(str.maketrans("يىكۀة", "ییکهه"))
     value = unicodedata.normalize("NFKC", value).lower().strip()
     value = "".join(ch for ch in value if not unicodedata.combining(ch))
-    return re.sub(r"[^\w\u0600-\u06ff-]+", "", value, flags=re.UNICODE)
+    return re.sub(r"[^\w\u0600-\u06ff]+", "", value, flags=re.UNICODE)
 
 
 def _candidate(row: tuple[Any, ...]) -> dict[str, Any]:
