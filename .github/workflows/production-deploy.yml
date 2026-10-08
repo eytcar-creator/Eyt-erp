@@ -27,7 +27,7 @@ jobs:
           DATABASE_URL: postgresql://eyt_user:${{ secrets.POSTGRES_PASSWORD }}@db:5432/eyt_erp
           JWT_SECRET: ${{ secrets.JWT_SECRET || 'ci-compose-validation-jwt' }}
           BOOTSTRAP_SECRET: ${{ secrets.BOOTSTRAP_SECRET || 'ci-compose-validation-bootstrap' }}
-          RUBIKA_WORKSHOP_WEBHOOK_SECRET: ${{ secrets.RUBIKA_WORKSHOP_WEBHOOK_SECRET }}
+          RUBIKA_WORKSHOP_WEBHOOK_SECRET: ${{ secrets.RUBIKA_WORKSHOP_WEBHOOK_SECRET || 'ci-compose-validation-rubika' }}
           N8N_ENCRYPTION_KEY: ${{ secrets.N8N_ENCRYPTION_KEY || 'automation-profile-not-enabled-in-production' }}
           EYT_ERP_CHANNEL_TOKEN: ${{ secrets.EYT_ERP_CHANNEL_TOKEN || 'automation-profile-not-enabled-in-production' }}
         run: docker compose -f docker-compose.production.yml config
