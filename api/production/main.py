@@ -45,51 +45,27 @@ from .inventory_month_end_api import router as inventory_month_end_router
 from .inventory_profit_first_api import router as inventory_profit_first_router
 from .document_intake_api import router as document_intake_router
 from ..orders.fastapi_router import router as order_router, configure_order_center
+from ..orders.channel_intake_api import router as channel_intake_router
 from ..orders.order_center import OrderCenter
 from ..orders.postgres_adapter import PostgresOrderRepository, PostgresInventoryGateway
 
-app = FastAPI(title="E.Y.T ERP API", version="0.9.2")
-app.include_router(inventory_router)
-app.include_router(core_master_router)
-app.include_router(inventory_production_router)
-app.include_router(inventory_month_end_router)
-app.include_router(inventory_profit_first_router)
-app.include_router(document_intake_router)
-app.include_router(auth_router)
-app.include_router(production_control_router)
-app.include_router(operation_router)
-app.include_router(costing_router)
-app.include_router(dashboard_router)
-app.include_router(sales_router)
-app.include_router(procurement_router)
-app.include_router(finance_router)
-app.include_router(finance_cash_control_router)
-app.include_router(finance_reconciliation_router)
-app.include_router(finance_alerts_router)
-app.include_router(finance_management_router)
-app.include_router(commercial_router)
-app.include_router(inventory_flow_router)
-app.include_router(product_master_router)
-app.include_router(vehicle_master_router)
-app.include_router(public_catalog_router)
-app.include_router(purchase_receiving_router)
-app.include_router(qc_router)
-app.include_router(profit_router)
-app.include_router(payable_router)
-app.include_router(order_router)
-app.include_router(customer_portal_router)
-app.include_router(customer_market_router)
-app.include_router(repeat_purchase_router)
-app.include_router(cash_collection_router)
-app.include_router(profit_dashboard_router)
-app.include_router(performance_output_router)
-app.include_router(performance_control_router)
-app.include_router(strategy_action_router)
-app.include_router(strategy_users_router)
-app.include_router(strategy_notification_router)
-app.include_router(crm_network_router)
-app.include_router(automation_router)
-app.include_router(org_management_router)
+app = FastAPI(title="E.Y.T ERP API", version="0.9.3")
+for router in (
+    inventory_router, core_master_router, inventory_production_router,
+    inventory_month_end_router, inventory_profit_first_router, document_intake_router,
+    auth_router, production_control_router, operation_router, costing_router,
+    dashboard_router, sales_router, procurement_router, finance_router,
+    finance_cash_control_router, finance_reconciliation_router, finance_alerts_router,
+    finance_management_router, commercial_router, inventory_flow_router,
+    product_master_router, vehicle_master_router, public_catalog_router,
+    purchase_receiving_router, qc_router, profit_router, payable_router,
+    order_router, channel_intake_router, customer_portal_router, customer_market_router,
+    repeat_purchase_router, cash_collection_router, profit_dashboard_router,
+    performance_output_router, performance_control_router, strategy_action_router,
+    strategy_users_router, strategy_notification_router, crm_network_router,
+    automation_router, org_management_router,
+):
+    app.include_router(router)
 
 def _configure_order_center() -> None:
     database_url = os.environ.get("DATABASE_URL")
@@ -116,7 +92,7 @@ def ceo_portal() -> FileResponse:
 
 @app.get("/health", tags=["system"])
 def health() -> dict[str, str]:
-    return {"status": "ok", "service": "eyt-erp", "version": "0.9.2"}
+    return {"status": "ok", "service": "eyt-erp", "version": "0.9.3"}
 
 @app.get("/ready", tags=["system"])
 def readiness() -> dict[str, str]:
@@ -131,4 +107,4 @@ def readiness() -> dict[str, str]:
                 cur.fetchone()
     except Exception as exc:
         raise HTTPException(status_code=503, detail="database is not ready") from exc
-    return {"status": "ready", "service": "eyt-erp", "version": "0.9.2"}
+    return {"status": "ready", "service": "eyt-erp", "version": "0.9.3"}
