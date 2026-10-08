@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import unicodedata
 from typing import Any
 
 import psycopg
@@ -17,7 +18,8 @@ def _connect():
 def _norm(value: str | None) -> str:
     value = value or ""
     value = value.translate(str.maketrans("يىكۀة","ییکهه"))
-    value = value.lower().strip()
+    value = unicodedata.normalize("NFKC", value).lower().strip()
+    value = "".join(ch for ch in value if not unicodedata.combining(ch))
     return re.sub(r"[^\w\u0600-\u06ff]+", "", value, flags=re.UNICODE)
 
 
