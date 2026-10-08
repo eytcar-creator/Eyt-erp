@@ -69,6 +69,9 @@ jobs:
       BOOTSTRAP_SECRET: ci-only-production-smoke-bootstrap
       ACCESS_TOKEN_MINUTES: 15
       REFRESH_TOKEN_DAYS: 30
+      RUBIKA_WORKSHOP_WEBHOOK_SECRET: ci-rubika
+      N8N_ENCRYPTION_KEY: ci-n8n-key
+      EYT_ERP_CHANNEL_TOKEN: ci-channel-token
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -87,7 +90,7 @@ jobs:
           done
           echo "ERP readiness did not become healthy in time"
           docker compose -f docker-compose.production.yml ps
-          docker compose -f docker-compose.production.yml logs --no-color api db catalog
+          docker compose -f docker-compose.production.yml logs --no-color migrate api db catalog
           exit 1
       - name: Check customer catalog portal
         run: curl --fail --silent --show-error http://localhost:8080/ | grep -q "پرتال مشتری E.Y.T"
@@ -100,7 +103,7 @@ jobs:
         run: docker compose -f docker-compose.production.yml ps
       - name: Show logs on failure
         if: failure()
-        run: docker compose -f docker-compose.production.yml logs --no-color api db catalog
+        run: docker compose -f docker-compose.production.yml logs --no-color migrate api db catalog
       - name: Tear down production stack
         if: always()
         run: docker compose -f docker-compose.production.yml down -v
