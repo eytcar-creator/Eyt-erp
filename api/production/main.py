@@ -60,7 +60,7 @@ for router in (
     dashboard_router, sales_router, procurement_router, finance_router,
     finance_cash_control_router, finance_reconciliation_router, finance_alerts_router,
     finance_management_router, commercial_router, inventory_flow_router,
-    product_master_router, vehicle_master_router, public_catalog_router,
+    product_master_router, vehicle_master_router,
     purchase_receiving_router, qc_router, profit_router, payable_router,
     order_router, channel_intake_router, ai_order_agent_router, rubika_workshop_router,
     customer_portal_router, customer_market_router,
@@ -70,6 +70,8 @@ for router in (
     automation_router, org_management_router,
 ):
     app.include_router(router)
+
+app.include_router(public_catalog_router)
 
 def _configure_order_center() -> None:
     database_url = os.environ.get("DATABASE_URL")
