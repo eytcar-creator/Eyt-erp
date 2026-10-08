@@ -70,6 +70,8 @@ jobs:
       ACCESS_TOKEN_MINUTES: 15
       REFRESH_TOKEN_DAYS: 30
       RUBIKA_WORKSHOP_WEBHOOK_SECRET: ci-rubika
+      N8N_ENCRYPTION_KEY: ci-n8n-key
+      EYT_ERP_CHANNEL_TOKEN: ci-channel-token
     steps:
       - name: Checkout
         uses: actions/checkout@v4
