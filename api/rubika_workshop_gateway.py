@@ -144,6 +144,7 @@ def _run_extraction(message_id: str) -> dict[str, Any]:
             if not row:
                 raise HTTPException(status_code=404, detail="Workshop message not found")
             proposal = extract_message(row[0] or "", row[1])
+            proposal["draft"] = build_draft(proposal, row[0] or "", cur)
             cur.execute(update, (json.dumps(proposal, ensure_ascii=False), message_id))
         conn.commit()
     return proposal
