@@ -216,3 +216,31 @@ async def extract_one(message_id: str) -> dict[str, Any]:
         "proposal": proposal,
         "erp_mutation": False,
     }
+
+
+@router.post("/extraction/{message_id}/approve")
+async def approve_extraction(message_id: str) -> dict[str, Any]:
+    sql = """
+        UPDATE rubika_workshop_messages
+        SET status = 'APPROVED_PENDING_ERP'
+        WHERE id = %s AND status = 'EXTRACTED_PENDING_APPROVAL'
+        RETURNING id, extracted_data
+    """
+    try:
+        with _db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, (message_id,))
+                row = cur.fetchone()
+            conn.commit()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Unable to approve extraction") from exc
+    if not row:
+        raise HTTPException(status_code=409, detail="Message is not awaiting approval")
+    return {
+        "ok": True,
+        "message_id": message_id,
+        "status": "APPROVED_PENDING_ERP",
+        "proposal": row[1],
+        "erp_mutation": False,
+        "next_step": "CONTROLLED_ERP_MUTATION",
+    }
