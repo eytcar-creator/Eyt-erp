@@ -17,10 +17,10 @@ def _connect():
 
 def _norm(value: str | None) -> str:
     value = value or ""
-    value = value.translate(str.maketrans("يىكۀة","ییکهه"))
+    value = value.translate(str.maketrans("يىكۀة", "ییکهه"))
     value = unicodedata.normalize("NFKC", value).lower().strip()
     value = "".join(ch for ch in value if not unicodedata.combining(ch))
-    return re.sub(r"[^\w\u0600-\u06ff]+", "", value, flags=re.UNICODE)
+    return re.sub(r"[^\w\u0600-\u06ff-]+", "", value, flags=re.UNICODE)
 
 
 def _candidate(row: tuple[Any, ...]) -> dict[str, Any]:
@@ -31,13 +31,7 @@ def _candidate(row: tuple[Any, ...]) -> dict[str, Any]:
 class ResolutionService:
     """Read-only resolver over the existing Customer/Product Master data."""
 
-    def resolve_customer(
-        self,
-        customer_id: str | None = None,
-        customer_code: str | None = None,
-        phone: str | None = None,
-        name: str | None = None,
-    ) -> dict[str, Any]:
+    def resolve_customer(self, customer_id=None, customer_code=None, phone=None, name=None):
         with _connect() as conn, conn.cursor() as cur:
             if customer_id:
                 cur.execute(
@@ -47,7 +41,6 @@ class ResolutionService:
                 row = cur.fetchone()
                 if row:
                     return {"status": "EXACT", "confidence": 1.0, "source": "customer_id", "customer": _candidate(row)}
-
             for field, value in (("customer_code", customer_code), ("phone", phone)):
                 if not value:
                     continue
@@ -60,7 +53,6 @@ class ResolutionService:
                     return {"status": "EXACT", "confidence": 0.99, "source": field, "customer": _candidate(rows[0])}
                 if len(rows) > 1:
                     return {"status": "AMBIGUOUS", "confidence": 0.55, "source": field, "candidates": [_candidate(r) for r in rows]}
-
             if name:
                 needle = _norm(name)
                 if needle:
@@ -76,16 +68,9 @@ class ResolutionService:
                         return {"status": "EXACT", "confidence": 0.93, "source": "normalized_name", "customer": _candidate(rows[0])}
                     if rows:
                         return {"status": "AMBIGUOUS", "confidence": 0.60, "source": "normalized_name", "candidates": [_candidate(r) for r in rows]}
-
         return {"status": "NOT_FOUND", "confidence": 0.0, "source": None, "candidates": []}
 
-    def resolve_product(
-        self,
-        identifier: str | None = None,
-        name: str | None = None,
-        vehicle_make: str | None = None,
-        vehicle_model: str | None = None,
-    ) -> dict[str, Any]:
+    def resolve_product(self, identifier=None, name=None, vehicle_make=None, vehicle_model=None):
         with _connect() as conn, conn.cursor() as cur:
             if identifier:
                 cur.execute(
@@ -100,11 +85,10 @@ class ResolutionService:
                     return {"status": "EXACT", "confidence": 1.0, "source": "product_identifier", "product": self._product(rows[0])}
                 if len(rows) > 1:
                     return {"status": "AMBIGUOUS", "confidence": 0.65, "source": "product_identifier", "candidates": [self._product(r) for r in rows]}
-
             if name:
                 needle = name.strip()
                 if needle:
-                    params: list[Any] = [f"%{needle}%", f"%{needle}%", f"%{needle}%"]
+                    params = [f"%{needle}%", f"%{needle}%", f"%{needle}%"]
                     sql = """SELECT DISTINCT p.id,p.sku,p.product_code,p.name_fa,p.name_en,p.barcode,p.oem_code
                              FROM products p
                              LEFT JOIN product_aliases pa ON pa.product_id=p.id
@@ -117,8 +101,7 @@ class ResolutionService:
                               AND (%s='' OR f.make ILIKE %s)
                               AND (%s='' OR f.model ILIKE %s)
                         )"""
-                        make = vehicle_make or ""
-                        model = vehicle_model or ""
+                        make, model = vehicle_make or "", vehicle_model or ""
                         params.extend([make, f"%{make}%", model, f"%{model}%"])
                     sql += " ORDER BY p.product_code LIMIT 20"
                     cur.execute(sql, params)
@@ -127,10 +110,9 @@ class ResolutionService:
                         return {"status": "EXACT", "confidence": 0.90, "source": "name_alias_fitment", "product": self._product(rows[0])}
                     if rows:
                         return {"status": "AMBIGUOUS", "confidence": 0.62, "source": "name_alias_fitment", "candidates": [self._product(r) for r in rows]}
-
         return {"status": "NOT_FOUND", "confidence": 0.0, "source": None, "candidates": []}
 
     @staticmethod
-    def _product(row: tuple[Any, ...]) -> dict[str, Any]:
+    def _product(row):
         keys = ("id", "sku", "product_code", "name_fa", "name_en", "barcode", "oem_code")
         return {k: (str(v) if k == "id" and v is not None else v) for k, v in zip(keys, row)}
