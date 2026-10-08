@@ -238,7 +238,13 @@ def confirm_intake(
                 raise HTTPException(status_code=404, detail="channel intake not found")
 
             if row[4] == "CONVERTED" and row[5]:
-                return {"intake_id": str(row[0]), "order_no": row[5], "status": "CONVERTED", "duplicate": True}
+                return {
+                    "intake_id": str(row[0]),
+                    "order_no": row[5],
+                    "status": "CONVERTED",
+                    "duplicate": True,
+                    "confirmation_id": row[7],
+                }
 
             if row[4] != "PENDING_CONFIRMATION":
                 raise HTTPException(status_code=409, detail=f"intake is not confirmable: {row[4]}")
@@ -253,6 +259,14 @@ def confirm_intake(
                 )
             if not row[2] or not items:
                 raise HTTPException(status_code=409, detail="intake has no confirmed customer/items")
+
+            cur.execute(
+                "SELECT id FROM channel_intakes WHERE confirmation_id=%s",
+                (confirmation.confirmation_id,),
+            )
+            prior_confirmation = cur.fetchone()
+            if prior_confirmation and str(prior_confirmation[0]) != str(row[0]):
+                raise HTTPException(status_code=409, detail="confirmation_id already used")
 
             try:
                 channel = OrderChannel(row[1])
@@ -325,7 +339,10 @@ def confirm_intake(
         notes=f"E.Y.T One intake {intake_id}",
     ))
     order_no = created["order_no"]
-    confirmed = order_api.order_center.confirm(order_no)
+    if created.get("status") not in {"PENDING_CONFIRMATION", "CONFIRMED"}:
+        confirmed = created
+    else:
+        confirmed = order_api.order_center.confirm(order_no)
 
     with _db() as conn:
         with conn.cursor() as cur:
