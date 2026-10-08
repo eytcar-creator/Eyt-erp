@@ -148,6 +148,9 @@ def receive_intake(
                     )
 
             status = "PENDING_CONFIRMATION" if not errors and payload.items else "RECEIVED"
+            # Persist resolved product IDs so confirmation never has to guess again.
+            if not errors:
+                raw["items"] = resolved
             cur.execute(
                 """
                 INSERT INTO channel_intakes
