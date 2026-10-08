@@ -205,7 +205,6 @@ def confirm_intake(
     # Re-run the commercial gate immediately before mutation so price, stock and
     # credit are validated against current state, not stale proposal data.
     gate = CommercialGate()
-    payment_preview = "CREDIT" if str((row[3] or {}).get("payment_mode") or "CASH").upper() == "CREDIT" else "CASH"
 
     with _db() as conn:
         with conn.cursor() as cur:
@@ -241,7 +240,7 @@ def confirm_intake(
             gate_result = gate.evaluate(
                 customer_id=str(row[2]),
                 warehouse_code=warehouse_code,
-                payment_type=payment_preview,
+                payment_type=payment_type.value,
                 items=tuple(
                     CommercialLine(product_id=str(item.get("product_id")), quantity=Decimal(str(item.get("quantity"))))
                     for item in items
