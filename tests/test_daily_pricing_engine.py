@@ -21,10 +21,10 @@ def test_daily_price_allocates_setup_and_scrap():
         ),
     )
     assert result["setup_per_unit"] == Decimal("30.00")
-    assert result["direct_cost"] == Decimal("135000.00")
-    assert result["true_unit_cost"] == Decimal("142105.26")
-    assert result["base_selling_price"] == Decimal("177631.58")
-    assert result["channel_prices"]["dealer"] == Decimal("159868.42")
+    assert result["direct_cost"] == Decimal("135030.00")
+    assert result["true_unit_cost"] == Decimal("142136.84")
+    assert result["base_selling_price"] == Decimal("177671.05")
+    assert result["channel_prices"]["dealer"] == Decimal("159903.95")
 
 def test_margin_is_on_selling_price_not_cost_plus_margin():
     result = calculate_daily_price(
