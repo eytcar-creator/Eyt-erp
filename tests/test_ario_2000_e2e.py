@@ -169,7 +169,7 @@ def test_ario_2000_end_to_end_profit_flow():
             invoice_id = cur.fetchone()[0]
             cur.execute("""
                 INSERT INTO payments(customer_id,amount,payment_method,reference_no)
-                VALUES (%s,1400000000,'BANK','PAY-%s') RETURNING id
+                VALUES (%s,1400000000,'BANK',%s) RETURNING id
             """, (customer_id, suffix))
             payment_id = cur.fetchone()[0]
             cur.execute(
