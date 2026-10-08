@@ -11,6 +11,7 @@ router = APIRouter(
 )
 
 WEBHOOK_SECRET_ENV = "RUBIKA_WORKSHOP_WEBHOOK_SECRET"
+DATABASE_URL_ENV = "DATABASE_URL"
 
 
 def _secret_ok(request: Request, supplied: str | None) -> bool:
@@ -103,12 +104,55 @@ def _extract(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _persist_event(event: dict[str, Any], raw_payload: dict[str, Any]) -> bool:
+    database_url = os.getenv(DATABASE_URL_ENV)
+    if not database_url:
+        raise RuntimeError("DATABASE_URL is not configured")
+
+    import psycopg
+
+    sql = """
+        INSERT INTO rubika_workshop_messages (
+            external_message_id,
+            idempotency_key,
+            chat_id,
+            sender_id,
+            sender_name,
+            message_text,
+            message_type,
+            raw_payload
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+        ON CONFLICT (idempotency_key) DO NOTHING
+        RETURNING id
+    """
+    with psycopg.connect(database_url, connect_timeout=3) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql,
+                (
+                    event["external_message_id"],
+                    event["idempotency_key"],
+                    event["chat_id"],
+                    event["sender_id"],
+                    event["sender_name"],
+                    event["message_text"],
+                    event["message_type"],
+                    json.dumps(raw_payload, ensure_ascii=False),
+                ),
+            )
+            inserted = cur.fetchone() is not None
+        conn.commit()
+    return inserted
+
+
 @router.get("/health")
 async def health() -> dict[str, Any]:
     return {
         "ok": True,
         "service": "rubika-workshop-gateway",
         "webhook_secret_configured": bool(os.getenv(WEBHOOK_SECRET_ENV)),
+        "database_configured": bool(os.getenv(DATABASE_URL_ENV)),
     }
 
 
@@ -139,13 +183,18 @@ async def webhook(
         else f"rubika:sha256:{digest}"
     )
 
-    # Raw-event persistence is intentionally isolated from canonical ERP mutation.
-    # The production DB migration creates rubika_workshop_messages for this stage.
+    try:
+        inserted = _persist_event(event, payload)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Unable to persist webhook event") from exc
+
     return {
         "ok": True,
         "accepted": True,
         "channel": "RUBIKA_WORKSHOP",
         "event": event,
+        "stored": inserted,
+        "duplicate": not inserted,
         "next_step": "AI_EXTRACTION",
         "erp_mutation": False,
     }
