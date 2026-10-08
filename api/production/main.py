@@ -59,7 +59,7 @@ for router in (
     dashboard_router, sales_router, procurement_router, finance_router,
     finance_cash_control_router, finance_reconciliation_router, finance_alerts_router,
     finance_management_router, commercial_router, inventory_flow_router,
-    product_master_router, vehicle_master_router, public_catalog_router,
+    product_master_router, vehicle_master_router,
     purchase_receiving_router, qc_router, profit_router, payable_router,
     order_router, channel_intake_router, ai_order_agent_router, commercial_gate_router, customer_portal_router, customer_market_router,
     repeat_purchase_router, cash_collection_router, profit_dashboard_router,
