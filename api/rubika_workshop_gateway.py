@@ -3,10 +3,12 @@ import json
 import os
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from api.rubika_workshop_extraction import extract_message
 from api.rubika_workshop_matching import build_draft
+from api.rubika_workshop_erp_posting import post_approved_production
+from api.production.auth import audit, require_permission
 
 router = APIRouter(
     prefix="/api/v1/integrations/rubika/workshop",
@@ -221,7 +223,7 @@ async def extract_one(message_id: str) -> dict[str, Any]:
 
 
 @router.post("/extraction/{message_id}/approve")
-async def approve_extraction(message_id: str) -> dict[str, Any]:
+async def approve_extraction(message_id: str, request: Request, principal: dict = Depends(require_permission("production.execute"))) -> dict[str, Any]:
     sql = """
         UPDATE rubika_workshop_messages
         SET status = 'APPROVED_PENDING_ERP'
@@ -246,3 +248,40 @@ async def approve_extraction(message_id: str) -> dict[str, Any]:
         "erp_mutation": False,
         "next_step": "CONTROLLED_ERP_MUTATION",
     }
+
+@router.post("/extraction/{message_id}/post")
+async def post_extraction(
+    message_id: str,
+    request: Request,
+    principal: dict = Depends(require_permission("production.execute")),
+) -> dict[str, Any]:
+    try:
+        with _db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT extracted_data FROM rubika_workshop_messages WHERE id=%s", (message_id,))
+                row = cur.fetchone()
+                if not row:
+                    raise HTTPException(404, "Workshop message not found")
+                result = post_approved_production(cur, message_id, row[0] or {}, str(principal["id"]))
+            conn.commit()
+    except HTTPException as exc:
+        try:
+            with _db() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("UPDATE rubika_workshop_messages SET status='ERP_POST_FAILED', processing_error=%s WHERE id=%s AND status='APPROVED_PENDING_ERP'", (str(exc.detail), message_id))
+                conn.commit()
+        except Exception:
+            pass
+        raise
+    except Exception as exc:
+        try:
+            with _db() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("UPDATE rubika_workshop_messages SET status='ERP_POST_FAILED', processing_error=%s WHERE id=%s AND status='APPROVED_PENDING_ERP'", (str(exc), message_id))
+                conn.commit()
+        except Exception:
+            pass
+        raise HTTPException(503, "Unable to post approved workshop message to ERP") from exc
+
+    audit(request, principal, "rubika.workshop.erp_post", message_id, result)
+    return {"ok": True, "message_id": message_id, "erp_mutation": True, **result}
