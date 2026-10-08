@@ -91,7 +91,7 @@ class ResolutionService:
                 cur.execute(
                     """SELECT id,sku,product_code,name_fa,name_en,barcode,oem_code
                        FROM products WHERE is_active AND
-                       (product_code=%s OR sku=%s OR barcode=%s OR oem_code=%s)
+                       (product_code ILIKE %s OR sku ILIKE %s OR barcode ILIKE %s OR oem_code ILIKE %s)
                        LIMIT 10""",
                     (identifier, identifier, identifier, identifier),
                 )
