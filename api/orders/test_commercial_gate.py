@@ -27,6 +27,8 @@ def test_cash_gate_passes_when_stock_is_available():
                 return [("p1", Decimal("20"), "3K000", "SKU", "بوش طبق", Decimal("100"), Decimal("40"), True)]
             if "FROM requested" in self.last_sql and "price_list_items" in self.last_sql:
                 return []
+            if "FROM price_master" in self.last_sql:
+                return []
             raise AssertionError(f"unexpected fetchall SQL: {self.last_sql}")
 
     class Conn:
