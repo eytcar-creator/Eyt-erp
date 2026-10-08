@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from .order_center import CreateOrder, OrderChannel, OrderLine, PaymentType
 from . import fastapi_router as order_api
+from .commercial_gate import CommercialGate, CommercialLine
 
 router = APIRouter(prefix="/api/v1/channel-intake", tags=["E.Y.T One - Channel Hub"])
 
@@ -200,6 +201,12 @@ def confirm_intake(
     if order_api.order_center is None:
         raise HTTPException(status_code=503, detail="Order Center is not configured")
 
+    # Explicit channel confirmation is the final customer confirmation step.
+    # Re-run the commercial gate immediately before mutation so price, stock and
+    # credit are validated against current state, not stale proposal data.
+    gate = CommercialGate()
+    payment_preview = "CREDIT" if str((row[3] or {}).get("payment_mode") or "CASH").upper() == "CREDIT" else "CASH"
+
     with _db() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -230,6 +237,25 @@ def confirm_intake(
             payment_raw = str(data.get("payment_mode") or "CASH").upper()
             payment_type = PaymentType.CREDIT if payment_raw == PaymentType.CREDIT.value else PaymentType.CASH
             warehouse_code = str(data.get("warehouse_code") or "MAIN")
+
+            gate_result = gate.evaluate(
+                customer_id=str(row[2]),
+                warehouse_code=warehouse_code,
+                payment_type=payment_preview,
+                items=tuple(
+                    CommercialLine(product_id=str(item.get("product_id")), quantity=Decimal(str(item.get("quantity"))))
+                    for item in items
+                    if item.get("product_id") and item.get("quantity")
+                ),
+            )
+            if gate_result["gate_status"] != "PASS":
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "message": "commercial gate did not pass",
+                        "gate": gate_result,
+                    },
+                )
 
             lines: list[OrderLine] = []
             for item in items:
