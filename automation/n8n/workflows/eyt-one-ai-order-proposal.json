@@ -1,0 +1,13 @@
+{
+  "name": "E.Y.T One - AI Order Proposal",
+  "nodes": [
+    {"parameters":{"httpMethod":"POST","path":"eyt-one/ai-order-proposal","responseMode":"responseNode","options":{}},"id":"ai-webhook","name":"Incoming Message","type":"n8n-nodes-base.webhook","typeVersion":2,"position":[240,300],"webhookId":"eyt-one-ai-order-proposal"},
+    {"parameters":{"method":"POST","url":"={{$env.EYT_ERP_API_BASE_URL}}/api/v1/ai-order-agent/propose","sendHeaders":true,"headerParameters":{"parameters":[{"name":"Content-Type","value":"application/json"}]},"sendBody":true,"contentType":"json","body":"={{ JSON.stringify({text: $json.body.text, customer_id: $json.body.customer_id || null}) }}","options":{}},"id":"ai-propose","name":"E.Y.T One AI Proposal","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[520,300]},
+    {"parameters":{"respondWith":"json","responseBody":"={{$json}}","options":{}},"id":"ai-response","name":"Return Proposal","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.1,"position":[800,300]}
+  ],
+  "connections":{"Incoming Message":{"main":[[{"node":"E.Y.T One AI Proposal","type":"main","index":0}]]},"E.Y.T One AI Proposal":{"main":[[{"node":"Return Proposal","type":"main","index":0}]]}},
+  "active":false,
+  "settings":{"executionOrder":"v1"},
+  "versionId":"eyt-one-ai-order-proposal-v1",
+  "tags":[]
+}
