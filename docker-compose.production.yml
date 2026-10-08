@@ -36,6 +36,7 @@ services:
       ACCESS_TOKEN_MINUTES: ${ACCESS_TOKEN_MINUTES:-15}
       REFRESH_TOKEN_DAYS: ${REFRESH_TOKEN_DAYS:-30}
       CHANNEL_INTAKE_SECRET: ${CHANNEL_INTAKE_SECRET:-}
+      RUBIKA_WORKSHOP_WEBHOOK_SECRET: ${RUBIKA_WORKSHOP_WEBHOOK_SECRET:?RUBIKA_WORKSHOP_WEBHOOK_SECRET must be set}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -59,12 +60,6 @@ services:
       migrate:
         condition: service_completed_successfully
     command: ["sh", "-c", "while true; do python scripts/run_finance_alert_sync.py; python scripts/run_finance_notification_worker.py --limit 25; sleep 60; done"]
-    healthcheck:
-      test: ["CMD-SHELL", "python scripts/check_finance_notification_health.py"]
-      interval: 60s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
 
   catalog:
     build:
