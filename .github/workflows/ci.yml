@@ -103,7 +103,7 @@ jobs:
         run: docker compose -f docker-compose.production.yml ps
       - name: Show logs on failure
         if: failure()
-        run: docker compose -f docker-compose.production.yml logs --no-color api db catalog
+        run: docker compose -f docker-compose.production.yml logs --no-color migrate api db catalog
       - name: Tear down production stack
         if: always()
         run: docker compose -f docker-compose.production.yml down -v
