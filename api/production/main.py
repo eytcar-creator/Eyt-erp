@@ -67,7 +67,7 @@ for router in (
     repeat_purchase_router, cash_collection_router, profit_dashboard_router,
     performance_output_router, performance_control_router, strategy_action_router, innovation_router,
     strategy_users_router, strategy_notification_router, crm_network_router,
-    automation_router, org_management_router, inventory_router, core_master_router,
+    automation_router, org_management_router,
 ):
     app.include_router(router)
 
