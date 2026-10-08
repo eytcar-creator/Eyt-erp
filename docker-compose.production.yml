@@ -93,6 +93,7 @@ services:
       N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY must be set}
       EYT_ERP_API_BASE_URL: ${EYT_ERP_API_BASE_URL:-http://api:8000}
+      EYT_ERP_CHANNEL_TOKEN: ${EYT_ERP_CHANNEL_TOKEN:?EYT_ERP_CHANNEL_TOKEN must be set}
       GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-Asia/Tehran}
     depends_on:
       api:
