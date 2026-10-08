@@ -1,0 +1,10 @@
+{
+  "name": "E.Y.T One - Channel Intake",
+  "nodes": [
+    {"parameters":{"httpMethod":"POST","path":"eyt-one/channel-intake","responseMode":"responseNode","options":{}},"id":"eyt-one-webhook","name":"Channel Webhook","type":"n8n-nodes-base.webhook","typeVersion":2,"position":[260,300],"webhookId":"eyt-one-channel-intake"},
+    {"parameters":{"method":"POST","url":"={{$env.EYT_ERP_API_BASE_URL}}/api/v1/channel-intake","sendHeaders":true,"headerParameters":{"parameters":[{"name":"Content-Type","value":"application/json"}]},"sendBody":true,"contentType":"json","body":"={{ JSON.stringify($json.body) }}","options":{}},"id":"eyt-one-erp-intake","name":"Send to E.Y.T One","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[540,300]},
+    {"parameters":{"respondWith":"json","responseBody":"={{$json}}","options":{}},"id":"eyt-one-response","name":"Return ERP Result","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.1,"position":[820,300]}
+  ],
+  "connections":{"Channel Webhook":{"main":[[{"node":"Send to E.Y.T One","type":"main","index":0}]]},"Send to E.Y.T One":{"main":[[{"node":"Return ERP Result","type":"main","index":0}]]}},
+  "active":false,"settings":{"executionOrder":"v1"},"versionId":"eyt-one-channel-intake-v1","tags":[]
+}
