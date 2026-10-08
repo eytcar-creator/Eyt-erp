@@ -1,4 +1,5 @@
 from api.production.public_catalog_api import router as public_catalog_router
+from api.production.main import app
 
 
 def test_public_catalog_routes_are_defined():
@@ -15,5 +16,6 @@ def test_public_catalog_module_is_read_only():
 
 
 def test_public_catalog_router_is_registered_in_production_app():
-    source = open("api/production/main.py", encoding="utf-8").read()
-    assert "app.include_router(public_catalog_router)" in source
+    paths = {route.path for route in app.routes}
+    assert "/api/public/catalog/products" in paths
+    assert "/api/public/catalog/products/{sku}" in paths
