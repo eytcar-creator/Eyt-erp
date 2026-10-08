@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from .order_center import CreateOrder, OrderChannel, OrderLine, PaymentType
 from . import fastapi_router as order_api
+from .commercial_gate import CommercialGate, CommercialLine
 
 router = APIRouter(prefix="/api/v1/channel-intake", tags=["E.Y.T One - Channel Hub"])
 
@@ -23,6 +24,13 @@ class IntakeItem(BaseModel):
     product_id: str | None = None
     product_code: str | None = None
     quantity: Decimal = Field(gt=0)
+
+
+class CustomerConfirmationIn(BaseModel):
+    confirmation_id: str = Field(min_length=8, max_length=200)
+    proposal_fingerprint: str = Field(min_length=64, max_length=64)
+    confirmation_source: str = Field(min_length=2, max_length=80)
+    confirmation_actor: str = Field(min_length=1, max_length=200)
 
 
 class ChannelIntakeIn(BaseModel):
@@ -43,6 +51,11 @@ def _db():
     if not url:
         raise HTTPException(status_code=503, detail="DATABASE_URL is not configured")
     return psycopg.connect(url)
+
+
+def _proposal_fingerprint(payload: dict[str, Any]) -> str:
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    return hashlib.sha256(canonical).hexdigest()
 
 
 def _verify_signature(raw_body: bytes, signature: str | None, channel_token: str | None = None) -> None:
@@ -117,6 +130,7 @@ def receive_intake(
                 if not cur.fetchone():
                     errors.append(f"customer not found: {payload.customer_id}")
 
+            seen_product_ids: set[str] = set()
             for item in payload.items:
                 product_id = item.product_id
                 if product_id:
@@ -138,21 +152,30 @@ def receive_intake(
                         f"active product not found: {item.product_id or item.product_code}"
                     )
                 else:
-                    resolved.append(
-                        {
-                            "product_id": str(product[0]),
-                            "product_code": product[1],
-                            "quantity": str(item.quantity),
-                        }
-                    )
+                    resolved_product_id = str(product[0])
+                    if resolved_product_id in seen_product_ids:
+                        errors.append(f"duplicate product line: {product[1]}")
+                    else:
+                        seen_product_ids.add(resolved_product_id)
+                        resolved.append(
+                            {
+                                "product_id": resolved_product_id,
+                                "product_code": product[1],
+                                "quantity": str(item.quantity),
+                            }
+                        )
 
             status = "PENDING_CONFIRMATION" if not errors and payload.items else "RECEIVED"
+            # Persist resolved product IDs so confirmation never has to guess again.
+            if not errors:
+                raw["items"] = resolved
+            proposal_fingerprint = _proposal_fingerprint(raw)
             cur.execute(
                 """
                 INSERT INTO channel_intakes
                   (channel, external_message_id, idempotency_key, customer_id,
-                   raw_text, payload, status, validation_errors, created_at, updated_at)
-                VALUES (%s,%s,%s,%s,%s,%s::jsonb,%s,%s::jsonb,NOW(),NOW())
+                   raw_text, payload, status, validation_errors, proposal_fingerprint, created_at, updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s::jsonb,%s,%s::jsonb,%s,NOW(),NOW())
                 RETURNING id
                 """,
                 (
@@ -164,6 +187,7 @@ def receive_intake(
                     json.dumps(raw, ensure_ascii=False),
                     status,
                     json.dumps(errors, ensure_ascii=False),
+                    proposal_fingerprint,
                 ),
             )
             intake_id = str(cur.fetchone()[0])
@@ -173,6 +197,7 @@ def receive_intake(
         "intake_id": intake_id,
         "order_no": None,
         "status": status,
+        "proposal_fingerprint": proposal_fingerprint,
         "customer_match": bool(payload.customer_id and not any("customer" in e for e in errors)),
         "product_matches": resolved,
         "validation_errors": errors,
@@ -186,6 +211,7 @@ def receive_intake(
 @router.post("/{intake_id}/confirm")
 def confirm_intake(
     intake_id: str,
+    confirmation: CustomerConfirmationIn,
     x_channel_signature: str | None = Header(default=None),
     x_channel_token: str | None = Header(default=None),
 ) -> dict[str, Any]:
@@ -200,10 +226,16 @@ def confirm_intake(
     if order_api.order_center is None:
         raise HTTPException(status_code=503, detail="Order Center is not configured")
 
+    # Explicit channel confirmation is the final customer confirmation step.
+    # Re-run the commercial gate immediately before mutation so price, stock and
+    # credit are validated against current state, not stale proposal data.
+    gate = CommercialGate()
+
     with _db() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT id, channel, customer_id, payload, status, order_no "
+                "SELECT id, channel, customer_id, payload, status, order_no, "
+                "proposal_fingerprint, confirmation_id "
                 "FROM channel_intakes WHERE id=%s FOR UPDATE",
                 (intake_id,),
             )
@@ -212,15 +244,35 @@ def confirm_intake(
                 raise HTTPException(status_code=404, detail="channel intake not found")
 
             if row[4] == "CONVERTED" and row[5]:
-                return {"intake_id": str(row[0]), "order_no": row[5], "status": "CONVERTED", "duplicate": True}
+                return {
+                    "intake_id": str(row[0]),
+                    "order_no": row[5],
+                    "status": "CONVERTED",
+                    "duplicate": True,
+                    "confirmation_id": row[7],
+                }
 
             if row[4] != "PENDING_CONFIRMATION":
                 raise HTTPException(status_code=409, detail=f"intake is not confirmable: {row[4]}")
 
             data = row[3] or {}
             items = data.get("items") or []
+            current_fingerprint = _proposal_fingerprint(data)
+            if row[6] != confirmation.proposal_fingerprint or current_fingerprint != confirmation.proposal_fingerprint:
+                raise HTTPException(
+                    status_code=409,
+                    detail={"status": "PROPOSAL_CHANGED", "current_fingerprint": current_fingerprint},
+                )
             if not row[2] or not items:
                 raise HTTPException(status_code=409, detail="intake has no confirmed customer/items")
+
+            cur.execute(
+                "SELECT id FROM channel_intakes WHERE confirmation_id=%s",
+                (confirmation.confirmation_id,),
+            )
+            prior_confirmation = cur.fetchone()
+            if prior_confirmation and str(prior_confirmation[0]) != str(row[0]):
+                raise HTTPException(status_code=409, detail="confirmation_id already used")
 
             try:
                 channel = OrderChannel(row[1])
@@ -228,8 +280,29 @@ def confirm_intake(
                 raise HTTPException(status_code=422, detail=f"unsupported order channel: {row[1]}") from exc
 
             payment_raw = str(data.get("payment_mode") or "CASH").upper()
-            payment_type = PaymentType.CREDIT if payment_raw == PaymentType.CREDIT.value else PaymentType.CASH
+            if payment_raw not in {PaymentType.CASH.value, PaymentType.CREDIT.value}:
+                raise HTTPException(status_code=422, detail="payment_mode must be CASH or CREDIT")
+            payment_type = PaymentType(payment_raw)
             warehouse_code = str(data.get("warehouse_code") or "MAIN")
+
+            gate_result = gate.evaluate(
+                customer_id=str(row[2]),
+                warehouse_code=warehouse_code,
+                payment_type=payment_type.value,
+                items=tuple(
+                    CommercialLine(product_id=str(item.get("product_id")), quantity=Decimal(str(item.get("quantity"))))
+                    for item in items
+                    if item.get("product_id") and item.get("quantity")
+                ),
+            )
+            if gate_result["gate_status"] != "PASS":
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "message": "commercial gate did not pass",
+                        "gate": gate_result,
+                    },
+                )
 
             lines: list[OrderLine] = []
             for item in items:
@@ -274,13 +347,21 @@ def confirm_intake(
         notes=f"E.Y.T One intake {intake_id}",
     ))
     order_no = created["order_no"]
-    confirmed = order_api.order_center.confirm(order_no)
+    if created.get("status") in {"RESERVED", "PREPARING", "READY_TO_SHIP", "SHIPPED", "DELIVERED", "FULFILLED"}:
+        confirmed = created
+    else:
+        confirmed = order_api.order_center.confirm(order_no)
 
     with _db() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "UPDATE channel_intakes SET status='CONVERTED', order_no=%s, updated_at=NOW() WHERE id=%s",
-                (order_no, intake_id),
+                """UPDATE channel_intakes
+                   SET status='CONVERTED', order_no=%s, confirmed_at=NOW(),
+                       confirmation_id=%s, confirmation_source=%s,
+                       confirmation_actor=%s, updated_at=NOW()
+                   WHERE id=%s""",
+                (order_no, confirmation.confirmation_id, confirmation.confirmation_source,
+                 confirmation.confirmation_actor, intake_id),
             )
         conn.commit()
 
@@ -288,5 +369,11 @@ def confirm_intake(
         "intake_id": intake_id,
         "order_no": order_no,
         "status": "CONVERTED",
+        "confirmation": {
+            "confirmation_id": confirmation.confirmation_id,
+            "confirmation_source": confirmation.confirmation_source,
+            "confirmation_actor": confirmation.confirmation_actor,
+            "proposal_fingerprint": confirmation.proposal_fingerprint,
+        },
         "order": confirmed,
     }

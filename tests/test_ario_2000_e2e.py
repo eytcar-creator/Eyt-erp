@@ -113,7 +113,7 @@ def test_ario_2000_end_to_end_profit_flow():
                     INSERT INTO inventory_transactions
                       (document_no,warehouse_code,product_code,quantity,unit,transaction_type,
                        reference_type,reference_id,unit_cost)
-                    VALUES (%s,'MAIN',%s,2000,'PCS','CONSUMPTION','PRODUCTION',%s,%s,%s)
+                    VALUES (%s,'MAIN',%s,2000,'PCS','CONSUMPTION','PRODUCTION',%s,%s)
                 """, (f"CONS-{name}-{suffix}", component_sku, order_no, cost))
                 cur.execute("""
                     INSERT INTO production_material_movements
@@ -169,7 +169,7 @@ def test_ario_2000_end_to_end_profit_flow():
             invoice_id = cur.fetchone()[0]
             cur.execute("""
                 INSERT INTO payments(customer_id,amount,payment_method,reference_no)
-                VALUES (%s,1400000000,'BANK','PAY-%s') RETURNING id
+                VALUES (%s,1400000000,'BANK',%s) RETURNING id
             """, (customer_id, suffix))
             payment_id = cur.fetchone()[0]
             cur.execute(
@@ -187,10 +187,11 @@ def test_ario_2000_end_to_end_profit_flow():
                 SELECT sales,actual_cogs,contribution_profit,contribution_margin
                 FROM eyt_order_actual_profitability WHERE order_no=%s
             """, (sales_order_no,))
-            assert cur.fetchone() == (
-                Decimal("1400000000"), Decimal("1090000000"),
-                Decimal("310000000"), Decimal("0.2214285714285714285714285714"),
-            )
+            sales, actual_cogs, contribution_profit, contribution_margin = cur.fetchone()
+            assert sales == Decimal("1400000000")
+            assert actual_cogs == Decimal("1090000000")
+            assert contribution_profit == Decimal("310000000")
+            assert abs(contribution_margin - (Decimal("310000000") / Decimal("1400000000"))) < Decimal("0.00000000000000000001")
 
             cur.execute("""
                 SELECT i.receivable_amount - COALESCE(SUM(pa.amount),0)
