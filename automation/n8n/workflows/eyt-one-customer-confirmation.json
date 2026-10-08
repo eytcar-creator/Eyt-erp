@@ -1,0 +1,19 @@
+{
+  "name": "E.Y.T One - Customer Confirmation",
+  "nodes": [
+    {"parameters":{"httpMethod":"POST","path":"eyt-one/confirm","responseMode":"responseNode","options":{}},"id":"eyt-one-confirm-webhook","name":"Customer Confirmation","type":"n8n-nodes-base.webhook","typeVersion":2,"position":[240,300],"webhookId":"eyt-one-confirm"},
+    {"parameters":{"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":2},"conditions":[{"leftValue":"={{$json.body.confirmed}}","rightValue":true,"operator":{"type":"boolean","operation":"true"}}],"combinator":"and"}},"id":"eyt-one-confirm-check","name":"Confirmed?","type":"n8n-nodes-base.if","typeVersion":2.2,"position":[460,300]},
+    {"parameters":{"method":"POST","url":"={{$env.EYT_ERP_API_BASE_URL}}/api/v1/channel-intake/{{$json.body.intake_id}}/confirm","sendHeaders":true,"headerParameters":{"parameters":[{"name":"Content-Type","value":"application/json"},{"name":"X-Channel-Token","value":"={{$env.EYT_ERP_CHANNEL_TOKEN}}"}]},"options":{}},"id":"eyt-one-confirm-erp","name":"Confirm in E.Y.T One","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[700,220]},
+    {"parameters":{"respondWith":"json","responseBody":"={{$json}}","options":{}},"id":"eyt-one-confirm-response","name":"Return Result","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.1,"position":[920,220]},
+    {"parameters":{"respondWith":"json","responseBody":"={{ {"status":"REJECTED","reason":"customer_confirmation_required"} }}","options":{}},"id":"eyt-one-confirm-reject","name":"Reject Unconfirmed","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.1,"position":[700,420]}
+  ],
+  "connections":{
+    "Customer Confirmation":{"main":[[{"node":"Confirmed?","type":"main","index":0}]]},
+    "Confirmed?":{"main":[[{"node":"Confirm in E.Y.T One","type":"main","index":0}],[{"node":"Reject Unconfirmed","type":"main","index":0}]]},
+    "Confirm in E.Y.T One":{"main":[[{"node":"Return Result","type":"main","index":0}]]}
+  },
+  "active":false,
+  "settings":{"executionOrder":"v1"},
+  "versionId":"eyt-one-customer-confirm-v1",
+  "tags":[]
+}
