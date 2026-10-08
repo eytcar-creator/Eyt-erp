@@ -34,15 +34,52 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          RUBIKA_WORKSHOP_WEBHOOK_SECRET: ${{ secrets.RUBIKA_WORKSHOP_WEBHOOK_SECRET }}
         run: |
           set -euo pipefail
           test -n "$DEPLOY_HOST"
           test -n "$DEPLOY_USER"
           test -n "$DEPLOY_SSH_KEY"
-          echo "Deployment secrets are configured."
+          test -n "$DEPLOY_PATH"
+          test -n "$RUBIKA_WORKSHOP_WEBHOOK_SECRET"
+          echo "Production deployment configuration is present."
 
-      - name: Deployment placeholder
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
-          echo "Deployment transport is intentionally not executed until the production SSH contract is configured."
-          echo "Required secrets: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY."
-          echo "Required runtime secret on the server: RUBIKA_WORKSHOP_WEBHOOK_SECRET."
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/eyt_deploy_key
+          chmod 600 ~/.ssh/eyt_deploy_key
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Sync application
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          rsync -az --delete             --exclude '.git/'             --exclude '.env.production'             --exclude '.secrets/'             -e "ssh -i ~/.ssh/eyt_deploy_key"             ./ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
+
+      - name: Deploy and migrate
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          RUBIKA_WORKSHOP_WEBHOOK_SECRET: ${{ secrets.RUBIKA_WORKSHOP_WEBHOOK_SECRET }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$RUBIKA_WORKSHOP_WEBHOOK_SECRET" |             ssh -i ~/.ssh/eyt_deploy_key "$DEPLOY_USER@$DEPLOY_HOST"             "cd '$DEPLOY_PATH' &&              mkdir -p .secrets &&              umask 077 &&              cat > .secrets/rubika_workshop_webhook_secret &&              docker compose -f docker-compose.production.yml up -d --build &&              docker compose -f docker-compose.production.yml run --rm migrate"
+
+      - name: Verify production containers
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/eyt_deploy_key "$DEPLOY_USER@$DEPLOY_HOST"             "cd '$DEPLOY_PATH' && docker compose -f docker-compose.production.yml ps"
