@@ -45,7 +45,10 @@ def _db():
     return psycopg.connect(url)
 
 
-def _verify_signature(raw_body: bytes, signature: str | None) -> None:
+def _verify_signature(raw_body: bytes, signature: str | None, channel_token: str | None = None) -> None:
+    internal_token = os.environ.get("EYT_ERP_CHANNEL_TOKEN")
+    if internal_token and channel_token and hmac.compare_digest(channel_token, internal_token):
+        return
     secret = os.environ.get("CHANNEL_INTAKE_SECRET")
     if not secret:
         return
@@ -61,13 +64,14 @@ def _verify_signature(raw_body: bytes, signature: str | None) -> None:
 def receive_intake(
     payload: ChannelIntakeIn,
     x_channel_signature: str | None = Header(default=None),
+    x_channel_token: str | None = Header(default=None),
 ) -> dict[str, Any]:
     if payload.channel not in SUPPORTED_CHANNELS:
         raise HTTPException(status_code=422, detail=f"unsupported channel: {payload.channel}")
 
     raw = payload.model_dump(mode="json")
     raw_bytes = json.dumps(raw, separators=(",", ":"), ensure_ascii=False).encode()
-    _verify_signature(raw_bytes, x_channel_signature)
+    _verify_signature(raw_bytes, x_channel_signature, x_channel_token)
 
     with _db() as conn:
         with conn.cursor() as cur:
@@ -183,6 +187,7 @@ def receive_intake(
 def confirm_intake(
     intake_id: str,
     x_channel_signature: str | None = Header(default=None),
+    x_channel_token: str | None = Header(default=None),
 ) -> dict[str, Any]:
     """Convert a validated intake into the canonical sales order and confirm it.
 
@@ -190,7 +195,7 @@ def confirm_intake(
     apply credit controls and transition the order to RESERVED.
     """
     raw = intake_id.encode()
-    _verify_signature(raw, x_channel_signature)
+    _verify_signature(raw, x_channel_signature, x_channel_token)
 
     if order_api.order_center is None:
         raise HTTPException(status_code=503, detail="Order Center is not configured")
