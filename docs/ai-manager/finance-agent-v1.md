@@ -38,7 +38,7 @@ The following existing implementation points were verified directly in the repos
 - Cash position and cash movements, clearly separating posted/settled amounts from forecasts.
 - Receivables: outstanding, overdue, aging buckets, and concentration by customer where supported by source data.
 - Payables and near-term commitments where supported by source data.
-- Product/order contribution using recorded revenue and recorded cost components only.
+- Order-level contribution using recorded revenue and recorded cost components only; SKU-level product profitability must be reported separately only when its source is validated.
 - Working-capital exposure in raw material, WIP, and finished goods only where reliable valuation data exists.
 - Data-quality warnings for missing costs, stale prices, unmatched documents, duplicated source records, or incomplete production batches.
 - A short action list ranked by expected cash impact, urgency, confidence, and reversibility.
@@ -55,7 +55,7 @@ The following existing implementation points were verified directly in the repos
 
 ## Initial API contract (implemented on the feature branch; not deployed)
 
-The branch now registers `GET /api/v1/ai-finance/daily-brief?as_of=YYYY-MM-DD&window_days=30` in `api/production/ai_finance_api.py`. It is read-only, protected by `finance.read`, and includes regression tests. It is not merged or deployed.
+The branch now registers `GET /api/v1/ai-finance/daily-brief?as_of=YYYY-MM-DD&window_days=30` in `api/production/ai_finance_api.py`. It is read-only, protected by `finance.read`, and includes regression tests. It is not merged or deployed. The contribution metric is explicitly named `order_contribution` because its canonical source is order-level; it must not be interpreted as per-SKU profitability.
 
 Implementation boundaries:
 - Cash actuals are recorded period movements from `cash_transactions`, not an available or reconciled balance.
@@ -73,7 +73,7 @@ Response envelope:
 - cash_forecast (if a validated forecast source exists)
 - receivables
 - payables
-- product_contribution
+- order_contribution (granularity: ORDER_LEVEL; not SKU-level profitability)
 - working_capital
 - data_quality
 - recommended_actions
