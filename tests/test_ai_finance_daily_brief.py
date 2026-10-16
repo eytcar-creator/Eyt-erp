@@ -68,6 +68,8 @@ def test_daily_brief_is_read_only_and_labels_unreconciled_cash(monkeypatch):
         "COLLECT_OVERDUE_RECEIVABLES",
     }
     assert result["data_quality"]["status"] == "WARNINGS"
+    assert "latest_invoice_date" in result["source_snapshot"]["receivables"]
+    assert "updated_at" not in result["source_snapshot"]["receivables"]
 
 
 def test_daily_brief_route_requires_finance_read_and_has_no_write_routes():
