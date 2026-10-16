@@ -24,7 +24,7 @@ The following existing implementation points were verified directly in the repos
 
 ### Implementation implications
 
-- **Security follow-up from source inspection:** `api/production/profit_dashboard_api.py` currently defines `/api/v1/profit-first/summary` and `/orders` without a visible `Depends(require_permission("finance.read"))` guard. Do not expose these routes as the AI agent's public data source until the existing route's access model is confirmed and a least-privilege guard is added/tested. The existence of `finance.read` elsewhere does not prove these specific endpoints enforce it.
+- **Security follow-up:** the initial source review found that `api/production/profit_dashboard_api.py` did not visibly enforce `finance.read` on `/summary` and `/orders`. The feature branch now adds `Depends(require_permission("finance.read"))` to both handlers and adds a regression test in `tests/test_profit_dashboard_security.py`. This is branch-level work; CI must pass before treating it as verified or merged.
 - **Data-model caution:** the CEO cash view currently reports aggregate cash transactions and net movement, not a reconciled point-in-time account balance. The daily brief must label this correctly and avoid presenting it as available cash.
 
 1. Do not rebuild the Profit First summary or cost calculation. The new endpoint should compose existing canonical views/services where their date semantics and data completeness are verified.
