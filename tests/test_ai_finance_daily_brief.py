@@ -61,7 +61,9 @@ def test_daily_brief_is_read_only_and_labels_unreconciled_cash(monkeypatch):
     assert result["cash_actuals"]["status"] == "RECORDED_MOVEMENTS_NOT_RECONCILED_BALANCE"
     assert result["cash_forecast"]["status"] == "INSUFFICIENT_DATA"
     assert result["receivables"]["overdue"] == 2200
-    assert result["product_contribution"]["rows_missing_cost"] == 1
+    assert result["order_contribution"]["rows_missing_cost"] == 1
+    assert result["order_contribution"]["granularity"] == "ORDER_LEVEL"
+    assert any(w["code"] == "CONTRIBUTION_IS_ORDER_LEVEL" for w in result["data_quality"]["warnings"])
     assert result["payables"]["status"] == "PARTIAL_OPEN_ALERTS_ONLY"
     assert {a["action_type"] for a in result["recommended_actions"]} == {
         "COMPLETE_COST_RECORDS",
