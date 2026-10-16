@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from .auth import require_permission
 
 import psycopg
 
@@ -16,7 +18,7 @@ def _connect():
 
 
 @router.get("/summary")
-def summary(days: int = Query(30, ge=1, le=3650)):
+def summary(days: int = Query(30, ge=1, le=3650), _=Depends(require_permission("finance.read"))):
     with _connect() as conn, conn.cursor() as cur:
         cur.execute("""
             SELECT COALESCE(SUM(sales_amount),0), COALESCE(SUM(cogs_amount),0),
@@ -50,7 +52,7 @@ def summary(days: int = Query(30, ge=1, le=3650)):
 
 
 @router.get("/orders")
-def orders(days: int = Query(30, ge=1, le=3650), limit: int = Query(200, ge=1, le=1000)):
+def orders(days: int = Query(30, ge=1, le=3650), limit: int = Query(200, ge=1, le=1000), _=Depends(require_permission("finance.read"))):
     with _connect() as conn, conn.cursor() as cur:
         cur.execute("""
             SELECT order_no, order_date, customer_id, order_status, sales_amount, cogs_amount,
