@@ -10,6 +10,26 @@ Deliver the first bounded E.Y.T AI Manager capability: a read-only daily finance
 
 The ERP README describes a FastAPI + PostgreSQL application and an operational flow covering procurement, receiving, inventory, BOM, production, QC, sales, receivables, and dashboards. The agent must reuse those existing records and services. It must not create a parallel ledger or duplicate inventory/costing truth.
 
+## Repository inspection findings (main branch, 2026-10-16)
+
+The following existing implementation points were verified directly in the repository:
+
+- API entry point: `api/production/main.py`; it already registers finance, cash-control, reconciliation, alerts, management, Profit First dashboard, inventory Profit First, costing, payable, and production routers.
+- Existing Profit First read API: `GET /api/v1/profit-first/summary?days=30` and `GET /api/v1/profit-first/orders`, implemented in `api/production/profit_dashboard_api.py`. The summary reads `profit_first_order_control` and returns sales, COGS, gross profit, collected cash, receivables, operational cash contribution, margin and collection realization.
+- Cash source ledger: `finance_funding_sources` and `finance_cash_movements`, defined by `database/migrations/20260930_finance_cash_control_v1.sql`. Movement status exists and must be filtered/labelled; a funding source's `current_balance` is a stored balance and should not be treated as reconciled bank truth without reconciliation evidence.
+- CEO dashboard sources: `database/migrations/034_eyt_ceo_dashboard_actual_profit.sql` defines `cash_accounts`, `cash_transactions`, `receivables`, `ceo_cash_position`, `ceo_receivables`, `ceo_profit`, and `ceo_dashboard`. It links actual contribution to `eyt_order_actual_profitability`, and product/customer profitability views.
+- Production actual cost source: `database/migrations/032_eyt_actual_cost_v1.sql` defines `eyt_snapshot_actual_production_cost` and `eyt_production_actual_cost`, using recorded material movements, operation service/transport, scrap, holding, packaging and overhead components.
+- Finance read authorization already exists as `require_permission("finance.read")` in `api/production/auth.py`; migration 037 grants that permission to the CEO role.
+- The production Compose file includes a finance worker for existing finance alert/notification synchronization. That is not evidence that the AI daily briefing or its scheduler exists.
+
+### Implementation implications
+
+1. Do not rebuild the Profit First summary or cost calculation. The new endpoint should compose existing canonical views/services where their date semantics and data completeness are verified.
+2. Keep cash movement ledger and CEO `cash_transactions` distinct until the existing reconciliation bridge proves how they relate; never add both together.
+3. Keep cash balance, net cash movement, collections, invoices, and forecast commitments as separate measures.
+4. Treat `eyt_production_actual_cost` as a recorded production cost snapshot, not proof that every open order has a complete final cost. Missing or stale snapshots must be surfaced.
+5. Before implementation, inspect the SQL definitions for `profit_first_order_control`, `eyt_order_actual_profitability`, and the settlement/reconciliation services. The first code change must not assume their grain, currency, or status semantics from their names alone.
+
 ## v1 outputs
 
 - Cash position and cash movements, clearly separating posted/settled amounts from forecasts.
