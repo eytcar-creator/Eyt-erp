@@ -163,10 +163,10 @@ def daily_brief(
         "window_days": window_days,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source_snapshot": {
-            "cash_transactions": {"updated_at": cash_updated.isoformat() if cash_updated else None, "records": cash_count},
-            "receivables": {"updated_at": recv_updated.isoformat() if recv_updated else None, "open_invoices": recv_count},
-            "eyt_order_actual_profitability": {"updated_at": contribution_updated.isoformat() if contribution_updated else None, "orders": order_count},
-            "finance_settlement_alerts": {"updated_at": payable_updated.isoformat() if payable_updated else None, "open_alerts": alert_count},
+            "cash_transactions": {"latest_recorded_at": cash_updated.isoformat() if cash_updated else None, "records": cash_count},
+            "receivables": {"latest_invoice_date": recv_updated.isoformat() if recv_updated else None, "open_invoices": recv_count},
+            "eyt_order_actual_profitability": {"latest_order_created_at": contribution_updated.isoformat() if contribution_updated else None, "orders": order_count},
+            "finance_settlement_alerts": {"latest_alert_created_at": payable_updated.isoformat() if payable_updated else None, "due_open_alerts": alert_count},
             "snapshot_mode": "live_read_only_query",
         },
         "cash_actuals": {
