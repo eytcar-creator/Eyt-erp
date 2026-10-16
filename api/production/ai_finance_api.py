@@ -149,7 +149,7 @@ def daily_brief(
         actions.append({
             "action_type": "COLLECT_OVERDUE_RECEIVABLES",
             "summary": "پیگیری مطالبات سررسیدگذشته ثبت‌شده",
-            "estimated_cash_impact": _number(recv_overdue),
+            "estimated_cash_impact": None,  # currency is not authoritative in the current source schema
             "urgency": "HIGH",
             "confidence": "MEDIUM",
             "evidence_refs": ["receivables.outstanding", "receivables.due_date"],
