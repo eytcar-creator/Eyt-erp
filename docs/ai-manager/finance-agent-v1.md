@@ -53,9 +53,16 @@ The following existing implementation points were verified directly in the repos
 6. Do not infer margin from list price alone. Show revenue, recorded direct cost, known additional costs, and excluded/unknown costs separately.
 7. All reports must be reproducible for the same source snapshot and period.
 
-## Initial API contract (proposal; not yet implemented)
+## Initial API contract (implemented on the feature branch; not deployed)
 
-GET /api/v1/ai-finance/daily-brief?as_of=YYYY-MM-DD&window_days=30
+The branch now registers `GET /api/v1/ai-finance/daily-brief?as_of=YYYY-MM-DD&window_days=30` in `api/production/ai_finance_api.py`. It is read-only, protected by `finance.read`, and includes regression tests. It is not merged or deployed.
+
+Implementation boundaries:
+- Cash actuals are recorded period movements from `cash_transactions`, not an available or reconciled balance.
+- Currency is left null because the composed sources do not prove a shared currency.
+- Payables are partial open settlement alerts only; total payables and forecast commitments remain unavailable.
+- Working-capital valuations and cash forecasts return `INSUFFICIENT_DATA` until authoritative sources are verified.
+- Actions are deterministic proposals with `status=PROPOSED`; no LLM, scheduler, or mutation is involved.
 
 Response envelope:
 - as_of
