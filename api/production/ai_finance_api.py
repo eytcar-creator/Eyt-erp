@@ -133,8 +133,9 @@ def daily_brief(
     warnings.append({"code": "CASH_NOT_RECONCILED", "severity": "HIGH", "message": "گردش نقد این گزارش از cash_transactions است و موجودی قابل‌استفاده یا مانده تطبیق‌شده بانکی محسوب نمی‌شود."})
     warnings.append({"code": "CURRENCY_NOT_EXPLICIT", "severity": "MEDIUM", "message": "منبع‌های ترکیب‌شده در این خروجی واحد پول مشترک را به‌صورت صریح ارائه نمی‌کنند؛ جمع‌ها را تا تأیید واحد پول، قطعی تلقی نکنید."})
     warnings.append({"code": "PAYABLES_PARTIAL", "severity": "MEDIUM", "message": "بخش پرداختنی‌ها فقط هشدارهای تسویه باز را نشان می‌دهد و فهرست کامل بدهی‌ها یا تعهدات آتی نیست."})
+    warnings.append({"code": "CONTRIBUTION_IS_ORDER_LEVEL", "severity": "MEDIUM", "message": "سود مشارکت این نسخه در سطح سفارش تجمیع شده است، نه SKU/محصول؛ برای تصمیم‌گیری درباره سود هر قطعه، گزارش سودآوری محصول باید جداگانه اعتبارسنجی شود."})
     if missing_cost_rows:
-        warnings.append({"code": "MISSING_COSTS", "severity": "HIGH", "message": f"{missing_cost_rows} ردیف فروش در بازه انتخابی فاقد بهای تمام‌شده ثبت‌شده معتبر است؛ سود محصولی ممکن است ناقص باشد."})
+        warnings.append({"code": "MISSING_COSTS", "severity": "HIGH", "message": f"{missing_cost_rows} ردیف فروش در بازه انتخابی فاقد بهای تمام‌شده ثبت‌شده معتبر است؛ سود مشارکت سفارش‌ها ممکن است ناقص باشد."})
         actions.append({
             "action_type": "COMPLETE_COST_RECORDS",
             "summary": "تکمیل بهای تمام‌شده ردیف‌های فروش فاقد هزینه معتبر",
@@ -196,7 +197,8 @@ def daily_brief(
             "currency": None,
             "source": "finance_settlement_alerts",
         },
-        "product_contribution": {
+        "order_contribution": {
+            "granularity": "ORDER_LEVEL",
             "status": "AVAILABLE_WITH_COST_WARNINGS" if missing_cost_rows else ("AVAILABLE" if order_count else "INSUFFICIENT_DATA"),
             "orders": order_count,
             "recorded_sales": _number(sales),
@@ -206,6 +208,7 @@ def daily_brief(
             "rows_missing_cost": missing_cost_rows,
             "currency": None,
             "source": "eyt_order_actual_profitability",
+            "note": "Order-level contribution; not SKU-level product profitability.",
         },
         "working_capital": {"status": "INSUFFICIENT_DATA", "inventory_valuation": None, "wip_valuation": None, "currency": None},
         "data_quality": {"status": "WARNINGS" if warnings else "OK", "warnings": warnings},
