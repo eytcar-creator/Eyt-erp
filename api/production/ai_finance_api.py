@@ -97,6 +97,7 @@ def daily_brief(
                 FROM sales_order_items soi
                 JOIN sales_orders so ON so.id = soi.sales_order_id
                 WHERE so.created_at::date >= %s AND so.created_at::date <= %s
+                  AND so.status IN ('CONFIRMED','FULFILLED')
                   AND COALESCE(NULLIF(soi.actual_cost_snapshot,0),
                                NULLIF(soi.cost_snapshot,0)) IS NULL
                 """,
