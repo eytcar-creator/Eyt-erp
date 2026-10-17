@@ -37,3 +37,8 @@ def test_migration_verifier_recognizes_four_digit_sql_migration_ids():
     assert MIGRATION_RE.match("999_rubika_workshop_gateway.sql")
     assert MIGRATION_RE.match("1000_rubika_workshop_erp_posting.sql")
     assert not MIGRATION_RE.match("1000rubika_workshop_erp_posting.sql")
+
+
+def test_bootstrap_serializes_concurrent_first_user_creation():
+    text = (ROOT / "api/production/auth.py").read_text(encoding="utf-8")
+    assert "pg_advisory_xact_lock(hashtextextended('eyt-erp-bootstrap', 0))" in text
