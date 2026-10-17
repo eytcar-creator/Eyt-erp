@@ -30,6 +30,7 @@ from .customer_market_api import router as customer_market_router
 from .repeat_purchase_api import router as repeat_purchase_router
 from .cash_collection_api import router as cash_collection_router
 from .profit_dashboard_api import router as profit_dashboard_router
+from .ai_finance_api import router as ai_finance_router
 from .performance_output_api import router as performance_output_router
 from .performance_control_api import router as performance_control_router
 from .strategy_action_api import router as strategy_action_router
@@ -64,7 +65,7 @@ for router in (
     purchase_receiving_router, qc_router, profit_router, payable_router,
     order_router, channel_intake_router, ai_order_agent_router, rubika_workshop_router,
     customer_portal_router, customer_market_router,
-    repeat_purchase_router, cash_collection_router, profit_dashboard_router,
+    repeat_purchase_router, cash_collection_router, profit_dashboard_router, ai_finance_router,
     performance_output_router, performance_control_router, strategy_action_router, innovation_router,
     strategy_users_router, strategy_notification_router, crm_network_router,
     automation_router, org_management_router,
