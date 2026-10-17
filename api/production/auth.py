@@ -80,6 +80,9 @@ def bootstrap(payload:BootstrapInput,request:Request):
     expected=os.getenv("BOOTSTRAP_SECRET")
     if not expected or request.headers.get("X-Bootstrap-Secret")!=expected: raise HTTPException(403,"Bootstrap is disabled or unauthorized")
     with db_connection() as conn:
+        # Serialize concurrent first-user setup attempts. Without this lock, two
+        # requests can both observe an empty user table and create two bootstrap users.
+        conn.execute("SELECT pg_advisory_xact_lock(hashtextextended('eyt-erp-bootstrap', 0))")
         if conn.execute("SELECT count(*) FROM eyt_users").fetchone()[0]: raise HTTPException(409,"Bootstrap already completed")
         role_id=conn.execute("SELECT id FROM eyt_roles WHERE name='CEO'").fetchone()[0]; user_id=conn.execute("INSERT INTO eyt_users(username,email,password_hash) VALUES(%s,%s,%s) RETURNING id",(payload.username,payload.email,hash_password(payload.password))).fetchone()[0]; conn.execute("INSERT INTO eyt_user_roles(user_id,role_id) VALUES(%s,%s)",(user_id,role_id)); conn.commit()
     audit(request,{"id":user_id},"auth.bootstrap",user_id); return {"id":user_id,"username":payload.username,"role":"CEO"}
