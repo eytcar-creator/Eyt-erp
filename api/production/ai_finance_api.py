@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 from datetime import date, datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -15,6 +16,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from .auth import require_permission
 
 router = APIRouter(prefix="/api/v1/ai-finance", tags=["AI Finance"])
+TEHRAN_TZ = ZoneInfo("Asia/Tehran")
+
+
+def _tehran_today() -> date:
+    """Use the business timezone for the default reporting date, regardless of container TZ."""
+    return datetime.now(TEHRAN_TZ).date()
 
 
 def _connect():
@@ -30,7 +37,7 @@ def _number(value: Any) -> float:
 
 @router.get("/daily-brief")
 def daily_brief(
-    as_of: date = Query(default_factory=date.today),
+    as_of: date = Query(default_factory=_tehran_today),
     window_days: int = Query(30, ge=1, le=3650),
     _=Depends(require_permission("finance.read")),
 ) -> dict[str, Any]:

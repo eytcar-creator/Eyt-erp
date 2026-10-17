@@ -86,3 +86,14 @@ def test_daily_brief_route_requires_finance_read_and_has_no_write_routes():
     assert '@router.post(' not in source
     assert '@router.put(' not in source
     assert '@router.delete(' not in source
+
+
+def test_default_reporting_date_uses_tehran_timezone(monkeypatch):
+    class FixedDatetime:
+        @classmethod
+        def now(cls, tz):
+            return datetime(2026, 10, 16, 20, 30, tzinfo=timezone.utc).astimezone(tz)
+
+    monkeypatch.setattr(ai_finance_api, "datetime", FixedDatetime)
+
+    assert ai_finance_api._tehran_today() == date(2026, 10, 17)
