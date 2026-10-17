@@ -7,7 +7,7 @@ import argparse
 import re
 from pathlib import Path
 
-MIGRATION_RE = re.compile(r"^(\d{3})_[A-Za-z0-9][A-Za-z0-9_.-]*\.sql$")
+MIGRATION_RE = re.compile(r"^(\d{3,})_[A-Za-z0-9][A-Za-z0-9_.-]*\.sql$")
 
 
 def discover(directory: Path) -> list[tuple[int, Path]]:
