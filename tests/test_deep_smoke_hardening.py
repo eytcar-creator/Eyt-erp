@@ -29,3 +29,11 @@ def test_legacy_material_issue_and_return_populate_actual_cost_fields():
 def test_profitability_excludes_non_revenue_order_states():
     text = (ROOT / "database/migrations/035_deep_smoke_hardening.sql").read_text(encoding="utf-8")
     assert "DRAFT','PENDING_CONFIRMATION','CANCELLED','RETURNED" in text
+
+
+def test_migration_verifier_recognizes_four_digit_sql_migration_ids():
+    from scripts.verify_migration_chain import MIGRATION_RE
+
+    assert MIGRATION_RE.match("999_rubika_workshop_gateway.sql")
+    assert MIGRATION_RE.match("1000_rubika_workshop_erp_posting.sql")
+    assert not MIGRATION_RE.match("1000rubika_workshop_erp_posting.sql")
