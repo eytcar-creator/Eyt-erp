@@ -180,3 +180,17 @@ def test_website_order_access_remains_bound_to_customer_session(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         fastapi_router._authorize_order_access(_request(), order, None)
     assert exc.value.status_code == 403
+
+
+
+def test_order_payload_rejects_duplicate_product_lines():
+    with pytest.raises(ValueError, match="duplicate product lines"):
+        fastapi_router.OrderIn(
+            customer_id=CUSTOMER_ID,
+            warehouse_code="MAIN",
+            channel="WEBSITE",
+            items=[
+                {"product_id": PRODUCT_ID, "quantity": Decimal("1"), "unit_price": Decimal("87.50")},
+                {"product_id": PRODUCT_ID, "quantity": Decimal("2"), "unit_price": Decimal("87.50")},
+            ],
+        )
