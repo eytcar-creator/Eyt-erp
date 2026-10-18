@@ -253,7 +253,7 @@ def fulfill_order(order_no: str, request: Request,
             # in the same transaction so it is not deducted a second time.
             conn.execute(
                 """UPDATE inventory_reservations
-                   SET status='CONSUMED', consumed_at=NOW()
+                   SET status='CONSUMED'
                    WHERE status='RESERVED' AND warehouse_code=%s AND product_code=%s
                      AND ((reference_type='SALES_ORDER' AND reference_id=%s) OR document_no=%s)""",
                 (order[2], product_code, order_no, order_no),
