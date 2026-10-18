@@ -85,6 +85,10 @@ def test_public_catalog_responses_never_include_prices(monkeypatch):
     assert listing["items"]
     assert forbidden.isdisjoint(listing["items"][0])
     assert forbidden.isdisjoint(detail)
+    # Arbitrary JSON attributes are not a safe public contract: they may later
+    # contain internal prices, costs, supplier notes, or other private metadata.
+    assert "attributes" not in listing["items"][0]
+    assert "attributes" not in detail
     product_queries = [
         query for query in connection.cursor_instance.queries
         if "FROM eyt_product_master" in query
