@@ -104,8 +104,14 @@ def _resolve_prices(items: list[ItemIn], customer_id: str | None = None) -> list
     resolved: list[ItemIn] = []
     for item in items:
         key = str(item.product_id)
-        price = price_rows.get(key) or master_rows.get(key)
-        if price is None:
+        # Presence, not truthiness, determines precedence. An explicitly configured
+        # zero/negative tier must be rejected below, not silently bypassed in favor
+        # of a more permissive fallback price.
+        if key in price_rows:
+            price = price_rows[key]
+        elif key in master_rows:
+            price = master_rows[key]
+        else:
             price = Decimal(str(product_rows[key][1] or 0))
         if price <= 0:
             raise HTTPException(status_code=422, detail=f"product has no valid sale price: {item.product_id}")
