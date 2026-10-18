@@ -89,3 +89,11 @@ def test_automation_fail_uses_bounded_exponential_backoff_and_dead_letters():
         assert seconds in api
     assert "locked_at=NULL" in api
     assert "locked_by=NULL" in api
+
+
+
+def test_automation_ack_requires_claim_and_supports_ignored_events():
+    api = (ROOT / "api" / "production" / "automation_api.py").read_text(encoding="utf-8")
+    assert 'outcome: Literal["DELIVERED", "IGNORED"] = "DELIVERED"' in api
+    assert "WHERE id=%s AND status='PROCESSING'" in api
+    assert "SET status=%s, delivered_at=now(), locked_at=NULL, locked_by=NULL" in api
