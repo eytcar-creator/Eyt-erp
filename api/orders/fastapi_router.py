@@ -146,6 +146,7 @@ def create_order(
     idempotency_key: str | None = Header(default=None),
     channel_token: str | None = Header(default=None, alias="X-EYT-Channel-Token"),
 ) -> dict[str, Any]:
+    channel_token = channel_token if isinstance(channel_token, str) else request.headers.get("X-EYT-Channel-Token")
     if order_center is None:
         raise HTTPException(status_code=503, detail="Order Center is not configured")
     customer_id = payload.customer_id
@@ -191,6 +192,7 @@ def get_order(
     request: Request,
     channel_token: str | None = Header(default=None, alias="X-EYT-Channel-Token"),
 ) -> dict[str, Any]:
+    channel_token = channel_token if isinstance(channel_token, str) else request.headers.get("X-EYT-Channel-Token")
     if order_center is None:
         raise HTTPException(status_code=503, detail="Order Center is not configured")
     result = order_center.orders.get(order_no)
@@ -206,6 +208,7 @@ def confirm_order(
     request: Request,
     channel_token: str | None = Header(default=None, alias="X-EYT-Channel-Token"),
 ) -> dict[str, Any]:
+    channel_token = channel_token if isinstance(channel_token, str) else request.headers.get("X-EYT-Channel-Token")
     if order_center is None:
         raise HTTPException(status_code=503, detail="Order Center is not configured")
     try:
