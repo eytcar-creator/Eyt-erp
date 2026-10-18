@@ -141,3 +141,42 @@ def test_internal_channel_order_accepts_configured_token(monkeypatch):
 
     assert center.command is not None
     assert center.command.channel == fastapi_router.OrderChannel.SHOP
+
+
+
+def test_internal_order_read_and_confirmation_access_requires_channel_token(monkeypatch):
+    order = {
+        "order_no": "EYT-TEST-002",
+        "customer_id": CUSTOMER_ID,
+        "channel": fastapi_router.OrderChannel.SHOP.value,
+    }
+    monkeypatch.setenv("EYT_ERP_CHANNEL_TOKEN", "trusted-ingestion-secret")
+
+    with pytest.raises(HTTPException) as missing:
+        fastapi_router._authorize_order_access(_request(), order, None)
+    assert missing.value.status_code == 401
+
+    with pytest.raises(HTTPException) as invalid:
+        fastapi_router._authorize_order_access(_request(), order, "wrong-token")
+    assert invalid.value.status_code == 401
+
+    fastapi_router._authorize_order_access(
+        _request(), order, "trusted-ingestion-secret"
+    )
+
+
+def test_website_order_access_remains_bound_to_customer_session(monkeypatch):
+    order = {
+        "order_no": "EYT-TEST-003",
+        "customer_id": CUSTOMER_ID,
+        "channel": fastapi_router.OrderChannel.WEBSITE.value,
+    }
+    monkeypatch.setattr(
+        fastapi_router,
+        "require_customer_session",
+        lambda _request: {"customerId": OTHER_CUSTOMER_ID},
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        fastapi_router._authorize_order_access(_request(), order, None)
+    assert exc.value.status_code == 403
