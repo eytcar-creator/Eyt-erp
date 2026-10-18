@@ -96,3 +96,48 @@ def test_website_order_passes_server_resolved_price_to_order_center(monkeypatch)
     assert center.command.customer_id == CUSTOMER_ID
     assert center.command.items[0].unit_price == Decimal("87.50")
     assert center.command.items[0].unit_price != Decimal("0.01")
+
+
+
+def test_internal_channel_order_rejects_missing_or_invalid_token(monkeypatch):
+    center = _OrderCenter()
+    monkeypatch.setattr(fastapi_router, "order_center", center)
+    monkeypatch.setenv("EYT_ERP_CHANNEL_TOKEN", "trusted-ingestion-secret")
+    monkeypatch.setattr(
+        fastapi_router,
+        "_resolve_prices",
+        lambda *args, **kwargs: pytest.fail("pricing must not run before channel authentication"),
+    )
+    payload = _payload()
+    payload = payload.model_copy(update={"channel": fastapi_router.OrderChannel.SHOP})
+
+    with pytest.raises(HTTPException) as missing:
+        fastapi_router.create_order(payload, _request())
+    assert missing.value.status_code == 401
+
+    with pytest.raises(HTTPException) as invalid:
+        fastapi_router.create_order(payload, _request(), channel_token="attacker-controlled")
+    assert invalid.value.status_code == 401
+    assert center.command is None
+
+
+def test_internal_channel_order_accepts_configured_token(monkeypatch):
+    center = _OrderCenter()
+    monkeypatch.setattr(fastapi_router, "order_center", center)
+    monkeypatch.setenv("EYT_ERP_CHANNEL_TOKEN", "trusted-ingestion-secret")
+    monkeypatch.setattr(
+        fastapi_router,
+        "_resolve_prices",
+        lambda items, customer_id=None: [
+            items[0].model_copy(update={"unit_price": Decimal("87.50")})
+        ],
+    )
+    payload = _payload()
+    payload = payload.model_copy(update={"channel": fastapi_router.OrderChannel.SHOP})
+
+    fastapi_router.create_order(
+        payload, _request(), channel_token="trusted-ingestion-secret"
+    )
+
+    assert center.command is not None
+    assert center.command.channel == fastapi_router.OrderChannel.SHOP
