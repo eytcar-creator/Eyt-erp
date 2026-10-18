@@ -30,8 +30,7 @@ def list_public_products(q: str | None = Query(default=None, max_length=150),
             where.append("EXISTS (SELECT 1 FROM eyt_product_vehicle_fitment f JOIN eyt_vehicle_master v ON v.id=f.vehicle_id WHERE f.product_id=p.id AND v.model ILIKE %s AND f.status='ACTIVE')")
             params.append(model)
         cur.execute(f"""SELECT p.id,p.sku,p.code128,p.product_name_fa,p.product_name_en,
-                               p.product_type,p.category,p.brand,p.unit,p.status,p.description,
-                               p.retail_price,p.distribution_price,p.wholesale_price,p.attributes
+                               p.product_type,p.category,p.brand,p.unit,p.status,p.description
                         FROM eyt_product_master p
                         WHERE {' AND '.join(where)}
                         ORDER BY p.product_name_fa,p.sku LIMIT %s""", [*params, limit])
@@ -58,8 +57,7 @@ def list_public_products(q: str | None = Query(default=None, max_length=150),
 def get_public_product(sku: str):
     with _connect() as conn, conn.cursor() as cur:
         cur.execute("""SELECT id,sku,code128,product_name_fa,product_name_en,product_type,
-                              category,brand,unit,status,description,retail_price,
-                              distribution_price,wholesale_price,attributes
+                              category,brand,unit,status,description
                        FROM eyt_product_master WHERE sku=%s AND status='ACTIVE'""", (sku,))
         row = cur.fetchone()
         if not row:
