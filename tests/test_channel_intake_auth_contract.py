@@ -43,3 +43,12 @@ def test_channel_intake_accepts_valid_hmac_signature(monkeypatch):
     signature = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
 
     _verify_signature(body, "sha256=" + signature, None)
+
+
+def test_channel_intake_confirmation_recovers_existing_reserved_order():
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[1] / "api" / "orders" / "channel_intake_api.py").read_text(encoding="utf-8")
+    assert 'if created.get("status") == "RESERVED":' in source
+    assert "confirmed = created" in source
+    assert "confirmed = order_api.order_center.confirm(order_no)" in source
