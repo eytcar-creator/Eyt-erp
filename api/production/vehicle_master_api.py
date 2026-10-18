@@ -77,11 +77,7 @@ def catalog_vehicles(q: str | None = Query(default=None, max_length=100)):
 
 @router.get("/catalog/vehicles/{vehicle_id}/products")
 def catalog_vehicle_products(vehicle_id: str):
-    """Return only active, confirmed vehicle fitments plus the canonical product UUID.
-
-    Sale price is included only as the current catalog/base price. Customer-specific
-    pricing must be resolved by the authenticated commercial layer before checkout.
-    """
+    """Return public vehicle fitment data without exposing any prices."""
     with _connect() as conn, conn.cursor() as cur:
         cur.execute("SELECT id FROM vehicle_master WHERE vehicle_id=%s AND is_active", (vehicle_id,))
         vehicle = cur.fetchone()
@@ -89,14 +85,14 @@ def catalog_vehicle_products(vehicle_id: str):
             raise HTTPException(404, "Vehicle not found")
         cur.execute(
             """SELECT p.id,p.product_code,p.sku,p.name_fa,p.name_en,p.product_type,p.unit,p.barcode,p.oem_code,
-                      p.specification,p.sale_price,c.code,c.name_fa,pc.position,pc.side,pc.year_from,pc.year_to
+                      p.specification,c.code,c.name_fa,pc.position,pc.side,pc.year_from,pc.year_to
                FROM product_vehicle_compatibility pc JOIN products p ON p.id=pc.product_id
                LEFT JOIN product_categories c ON c.id=p.category_id
                WHERE pc.vehicle_id=%s AND pc.is_active AND pc.fitment_status='CONFIRMED'
                  AND pc.fitment_confidence='CONFIRMED' AND p.is_active
                ORDER BY c.code,p.name_fa""", (vehicle[0],))
         keys = ["productId", "productCode", "sku", "nameFa", "nameEn", "productType", "unit", "barcode", "oemCode",
-                "specification", "salePrice", "categoryCode", "categoryNameFa", "position", "side", "yearFrom", "yearTo"]
+                "specification", "categoryCode", "categoryNameFa", "position", "side", "yearFrom", "yearTo"]
         return [dict(zip(keys, row)) for row in cur.fetchall()]
 
 
