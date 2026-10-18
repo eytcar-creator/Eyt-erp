@@ -39,9 +39,12 @@ def test_price_list_has_customer_foreign_key():
     assert "FOREIGN KEY (default_price_list_id) REFERENCES price_lists(id)" in MIGRATION
 
 
-def test_price_resolution_is_server_side_for_website_and_b2b():
-    assert 'payload.channel.value in {"WEBSITE", "B2B"}' in ORDERS
+def test_order_creation_authenticates_customer_and_internal_channels():
+    assert "payload.channel == OrderChannel.WEBSITE" in ORDERS
     assert "require_customer_session(request)" in ORDERS
+    assert "Valid internal channel token required" in ORDERS
+    assert "_authorize_order_access(request, result, channel_token)" in ORDERS
+    assert "_authorize_order_access(request, order, channel_token)" in ORDERS
     assert "_resolve_prices(" in ORDERS
     assert "customer_id=customer_id" in ORDERS
 
