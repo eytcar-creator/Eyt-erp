@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
-"""Verify the canonical SQL migration sequence and reject duplicate IDs."""
+"""Verify the canonical SQL migration sequence and reject duplicate numeric IDs.
+
+Date-prefixed migrations (YYYYMMDD_name.sql) may share a date because the
+date is a release grouping, not a unique migration sequence number.
+"""
 
 from __future__ import annotations
 
 import argparse
 import re
+from collections import Counter
 from pathlib import Path
 
 MIGRATION_RE = re.compile(r"^(\d{3,})_[A-Za-z0-9][A-Za-z0-9_.-]*\.sql$")
+DATED_MIGRATION_RE = re.compile(r"^20\d{6}_[A-Za-z0-9]")
 
 
 def discover(directory: Path) -> list[tuple[int, Path]]:
@@ -18,7 +24,7 @@ def discover(directory: Path) -> list[tuple[int, Path]]:
         match = MIGRATION_RE.match(path.name)
         if match:
             migrations.append((int(match.group(1)), path))
-    return sorted(migrations, key=lambda item: item[0])
+    return sorted(migrations, key=lambda item: (item[0], item[1].name))
 
 
 def verify(directory: Path) -> None:
@@ -29,8 +35,15 @@ def verify(directory: Path) -> None:
     if not migrations:
         raise SystemExit("no numbered SQL migrations found")
 
-    numbers = [number for number, _ in migrations]
-    duplicates = sorted({number for number in numbers if numbers.count(number) > 1})
+    # Multiple files can legitimately share a YYYYMMDD release prefix.
+    # Only sequence-style numeric IDs must be unique.
+    sequence_ids = [
+        number for number, path in migrations
+        if not DATED_MIGRATION_RE.match(path.name)
+    ]
+    duplicates = sorted(
+        number for number, count in Counter(sequence_ids).items() if count > 1
+    )
     if duplicates:
         raise SystemExit(f"duplicate migration numbers: {duplicates}")
 
@@ -40,6 +53,7 @@ def verify(directory: Path) -> None:
     # system (for example the Alembic 012..017 history), so requiring the
     # entire directory to be 1..N is incorrect. Validate the legacy prefix
     # instead and allow explicitly later IDs.
+    numbers = [number for number, _ in migrations]
     expected = 1
     prefix_count = 0
     for number in numbers:
