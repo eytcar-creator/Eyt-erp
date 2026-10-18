@@ -2,6 +2,7 @@ from decimal import Decimal
 from uuid import UUID
 
 import pytest
+from fastapi import HTTPException
 
 from api.orders import fastapi_router
 
@@ -102,5 +103,23 @@ def test_missing_positive_server_price_is_rejected(monkeypatch):
         unit_price=Decimal("0.01"),
     )
 
-    with pytest.raises(Exception, match="product has no valid sale price"):
+    with pytest.raises(HTTPException, match="product has no valid sale price"):
         fastapi_router._resolve_prices([item])
+
+
+
+def test_zero_customer_price_is_rejected_instead_of_falling_back(monkeypatch):
+    cursor = _Cursor(
+        customer_prices=[(UUID(PRODUCT_ID), Decimal("0"))],
+        master_prices=[(UUID(PRODUCT_ID), Decimal("112.25"))],
+        sale_price=Decimal("150"),
+    )
+    _patch_db(monkeypatch, cursor)
+    item = fastapi_router.ItemIn(
+        product_id=PRODUCT_ID,
+        quantity=Decimal("1"),
+        unit_price=Decimal("0.01"),
+    )
+
+    with pytest.raises(HTTPException, match="product has no valid sale price"):
+        fastapi_router._resolve_prices([item], customer_id="2b15dbb4-c1a9-4d3e-9f1a-39c1a0f6b122")
