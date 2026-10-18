@@ -13,6 +13,11 @@ from .auth import audit, require_permission
 
 router = APIRouter(prefix="/api/sales", tags=["sales"])
 
+# Order Center confirms stock by moving orders to RESERVED; the legacy sales
+# API still uses CONFIRMED. Both states are valid at the sales boundary.
+INVOICEABLE_ORDER_STATUSES = ("CONFIRMED", "RESERVED", "FULFILLED")
+FULFILLABLE_ORDER_STATUSES = ("CONFIRMED", "RESERVED")
+
 
 def db():
     url = os.getenv("DATABASE_URL")
@@ -166,7 +171,7 @@ def issue_invoice(order_no: str, payload: InvoiceInput, request: Request,
         ).fetchone()
         if not order:
             raise HTTPException(404, "Sales order not found")
-        if order[2] not in ("CONFIRMED", "FULFILLED"):
+        if order[2] not in INVOICEABLE_ORDER_STATUSES:
             raise HTTPException(409, f"Cannot invoice order in status {order[2]}")
         lines = conn.execute(
             "SELECT product_id,quantity,unit_price,unit_cost FROM sales_order_items WHERE sales_order_id=%s ORDER BY id",
@@ -202,7 +207,7 @@ def fulfill_order(order_no: str, request: Request,
         ).fetchone()
         if not order:
             raise HTTPException(404, "Sales order not found")
-        if order[3] != "CONFIRMED":
+        if order[3] not in FULFILLABLE_ORDER_STATUSES:
             raise HTTPException(409, f"Cannot fulfill order in status {order[3]}")
 
         lines = conn.execute(
@@ -222,8 +227,9 @@ def fulfill_order(order_no: str, request: Request,
             ).fetchone()[0]
             reserved = conn.execute(
                 """SELECT COALESCE(SUM(quantity),0) FROM inventory_reservations
-                   WHERE product_code=%s AND warehouse_code=%s AND status='RESERVED'""",
-                (product_code, order[2]),
+                   WHERE product_code=%s AND warehouse_code=%s AND status='RESERVED'
+                     AND NOT ((reference_type='SALES_ORDER' AND reference_id=%s) OR document_no=%s)""",
+                (product_code, order[2], order_no, order_no),
             ).fetchone()[0]
             if balance - reserved < quantity:
                 raise HTTPException(409, f"Insufficient available inventory for {product_code}: available={balance-reserved} required={quantity}")
@@ -242,6 +248,15 @@ def fulfill_order(order_no: str, request: Request,
                    (product_code,warehouse_code,quantity,unit,transaction_type,reference_type,reference_id,unit_cost)
                    VALUES(%s,%s,%s,'PCS','ISSUE','SALES_ORDER',%s,%s)""",
                 (product_code, order[2], quantity, order_no, unit_cost),
+            )
+            # The ISSUE reduces physical stock; consume this order's reservation
+            # in the same transaction so it is not deducted a second time.
+            conn.execute(
+                """UPDATE inventory_reservations
+                   SET status='CONSUMED', consumed_at=NOW()
+                   WHERE status='RESERVED' AND warehouse_code=%s AND product_code=%s
+                     AND ((reference_type='SALES_ORDER' AND reference_id=%s) OR document_no=%s)""",
+                (order[2], product_code, order_no, order_no),
             )
             remaining = quantity
             releases = conn.execute(
