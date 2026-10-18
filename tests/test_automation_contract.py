@@ -71,3 +71,21 @@ def test_automation_dry_run_contract():
     assert "'DRY_RUN'" in migration
     assert '"/effects/{effect_id}/dry-run"' in api
     assert "status='DRY_RUN'" in api
+
+
+
+def test_automation_claim_recovers_stale_workers_with_bounded_attempts():
+    api = (ROOT / "api" / "production" / "automation_api.py").read_text(encoding="utf-8")
+    assert "COALESCE(locked_at, created_at) < now() - interval '15 minutes'" in api
+    assert "attempts < 5" in api
+    assert "attempts >= 5" in api
+    assert "worker lease expired after maximum attempts" in api
+
+
+def test_automation_fail_uses_bounded_exponential_backoff_and_dead_letters():
+    api = (ROOT / "api" / "production" / "automation_api.py").read_text(encoding="utf-8")
+    assert "WHEN attempts >= 5 THEN 'FAILED' ELSE 'PENDING' END" in api
+    for seconds in ("WHEN 1 THEN 60", "WHEN 2 THEN 120", "WHEN 3 THEN 240", "WHEN 4 THEN 480"):
+        assert seconds in api
+    assert "locked_at=NULL" in api
+    assert "locked_by=NULL" in api
