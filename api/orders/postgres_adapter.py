@@ -28,21 +28,23 @@ class PostgresOrderRepository:
                         if existing:
                             return self.get(existing[0]) or {"order_no": existing[0]}
                     order_no = self._new_order_no()
+                    subtotal = sum((Decimal(line.quantity) * Decimal(line.unit_price) for line in order.items), Decimal("0"))
                     cur.execute("""
                         INSERT INTO sales_orders
                           (order_no, customer_id, representative_id, warehouse_code, channel, status,
-                           idempotency_key, notes, payment_type, created_at)
-                        VALUES (%s,%s,%s,%s,%s,'PENDING_CONFIRMATION',%s,%s,%s,NOW())
+                           idempotency_key, notes, payment_type, subtotal, total_amount, created_at)
+                        VALUES (%s,%s,%s,%s,%s,'PENDING_CONFIRMATION',%s,%s,%s,%s,%s,NOW())
                         RETURNING id, order_no, customer_id, representative_id, warehouse_code, channel, status, payment_type
                     """, (order_no, order.customer_id, order.representative_id, order.warehouse_code,
-                          order.channel.value, order.idempotency_key, order.notes, order.payment_type.value))
+                          order.channel.value, order.idempotency_key, order.notes, order.payment_type.value, subtotal, subtotal))
                     row = cur.fetchone()
                     for line in order.items:
                         cur.execute("""
                             INSERT INTO sales_order_items
-                              (sales_order_id, product_id, quantity, unit_price, unit_cost)
-                            VALUES (%s,%s,%s,%s,0)
-                        """, (row[0], line.product_id, Decimal(line.quantity), Decimal(line.unit_price)))
+                              (sales_order_id, product_id, quantity, unit_price, unit_cost, line_total)
+                            VALUES (%s,%s,%s,%s,0,%s)
+                        """, (row[0], line.product_id, Decimal(line.quantity), Decimal(line.unit_price),
+                              Decimal(line.quantity) * Decimal(line.unit_price)))
                     conn.commit()
                     return {"order_no": row[1], "customer_id": row[2], "representative_id": row[3],
                             "warehouse_code": row[4], "channel": row[5], "status": row[6], "payment_type": row[7]}
