@@ -283,7 +283,13 @@ def confirm_intake(
         notes=f"E.Y.T One intake {intake_id}",
     ))
     order_no = created["order_no"]
-    confirmed = order_api.order_center.confirm(order_no)
+    # If the previous attempt reserved the order but crashed before marking the
+    # intake CONVERTED, the idempotent create returns that existing RESERVED order.
+    # Treat it as completed instead of trying to confirm a non-confirmable state.
+    if created.get("status") == "RESERVED":
+        confirmed = created
+    else:
+        confirmed = order_api.order_center.confirm(order_no)
 
     with _db() as conn:
         with conn.cursor() as cur:
