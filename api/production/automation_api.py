@@ -83,13 +83,34 @@ def claim_events(
 ) -> list[dict[str, Any]]:
     del principal
     with _db() as conn:
+        # A worker can disappear after claiming an event. Reclaim expired leases,
+        # but stop retrying after the bounded attempt budget is exhausted.
+        conn.execute(
+            """
+            UPDATE eyt_automation_events
+            SET status='FAILED',
+                last_error=COALESCE(NULLIF(last_error, ''),
+                    'worker lease expired after maximum attempts'),
+                locked_at=NULL,
+                locked_by=NULL
+            WHERE status='PROCESSING'
+              AND COALESCE(locked_at, created_at) < now() - interval '15 minutes'
+              AND attempts >= 5
+            """
+        )
         rows = conn.execute(
             """
             WITH picked AS (
                 SELECT id
                 FROM eyt_automation_events
-                WHERE status='PENDING' AND available_at <= now()
-                ORDER BY created_at
+                WHERE (
+                    status='PENDING' AND available_at <= now()
+                ) OR (
+                    status='PROCESSING'
+                    AND COALESCE(locked_at, created_at) < now() - interval '15 minutes'
+                    AND attempts < 5
+                )
+                ORDER BY available_at, created_at
                 FOR UPDATE SKIP LOCKED
                 LIMIT %s
             )
@@ -280,8 +301,19 @@ def fail_event(
         row = conn.execute(
             """
             UPDATE eyt_automation_events
-            SET status='PENDING',
-                available_at=now() + interval '1 minute',
+            SET status=CASE WHEN attempts >= 5 THEN 'FAILED' ELSE 'PENDING' END,
+                available_at=CASE
+                    WHEN attempts >= 5 THEN available_at
+                    ELSE now() + make_interval(secs =>
+                        CASE attempts
+                            WHEN 1 THEN 60
+                            WHEN 2 THEN 120
+                            WHEN 3 THEN 240
+                            WHEN 4 THEN 480
+                            ELSE 960
+                        END
+                    )
+                END,
                 last_error=%s,
                 locked_at=NULL,
                 locked_by=NULL
