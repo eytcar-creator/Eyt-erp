@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import os
 from decimal import Decimal
 from typing import Any
@@ -128,15 +129,29 @@ def _require_order_customer(request: Request, order: dict[str, Any]) -> None:
 
 
 @router.post("", status_code=201)
-def create_order(payload: OrderIn, request: Request, idempotency_key: str | None = Header(default=None)) -> dict[str, Any]:
+def create_order(
+    payload: OrderIn,
+    request: Request,
+    idempotency_key: str | None = Header(default=None),
+    channel_token: str | None = Header(default=None, alias="X-EYT-Channel-Token"),
+) -> dict[str, Any]:
     if order_center is None:
         raise HTTPException(status_code=503, detail="Order Center is not configured")
     customer_id = payload.customer_id
-    if payload.channel.value in {"WEBSITE", "B2B"}:
+    if payload.channel == OrderChannel.WEBSITE:
         session = require_customer_session(request)
         if session["customerId"] != customer_id:
             raise HTTPException(status_code=403, detail="Customer session does not match order customer")
         customer_id = session["customerId"]
+    else:
+        # Phone, shop, representative, WhatsApp and other internal-origin orders
+        # must use the trusted channel-ingestion credential. Otherwise a public
+        # caller could bypass customer-session checks by changing the channel.
+        expected_token = os.environ.get("EYT_ERP_CHANNEL_TOKEN", "")
+        if not expected_token:
+            raise HTTPException(status_code=503, detail="Internal order channel is not configured")
+        if not channel_token or not hmac.compare_digest(channel_token, expected_token):
+            raise HTTPException(status_code=401, detail="Valid internal channel token required")
     try:
         priced_items = _resolve_prices(payload.items, customer_id=customer_id)
         lines = tuple(
