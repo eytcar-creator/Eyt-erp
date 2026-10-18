@@ -29,7 +29,7 @@ Dashboard, new order, order tracking and account/credit views are specified in `
 ## Order creation authentication
 
 - `WEBSITE` orders require a valid customer portal session and the submitted customer ID must match that session.
-- Internal-origin orders (`SHOP`, `PHONE`, `REPRESENTATIVE`, `WHATSAPP`, `INSTAGRAM`, and `OTHER`) require the `X-EYT-Channel-Token` header. Configure `EYT_ERP_CHANNEL_TOKEN` as a strong secret in the API runtime and send it only from trusted server-side integrations.
+- Internal-origin order creation, reads, and confirmation (`SHOP`, `PHONE`, `REPRESENTATIVE`, `WHATSAPP`, `INSTAGRAM`, and `OTHER`) require the `X-EYT-Channel-Token` header. Configure `EYT_ERP_CHANNEL_TOKEN` as a strong secret in the API runtime and send it only from trusted server-side integrations.
 - Missing server configuration fails closed with HTTP 503; missing or invalid credentials fail with HTTP 401. Never place this token in browser code or a public mobile app.
 - For integrations, prefer the authenticated Channel Hub intake endpoint where available; do not expose the shared channel token to customers.
 - Client-provided line prices are ignored. The order endpoint resolves prices on the server before creating the order.
