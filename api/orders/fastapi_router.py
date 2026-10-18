@@ -120,12 +120,23 @@ def _resolve_prices(items: list[ItemIn], customer_id: str | None = None) -> list
     return resolved
 
 
-def _require_order_customer(request: Request, order: dict[str, Any]) -> None:
-    """Enforce customer isolation for website/B2B order reads and confirmation."""
+def _authorize_order_access(
+    request: Request,
+    order: dict[str, Any],
+    channel_token: str | None,
+) -> None:
+    """Authorize customer-owned website orders and trusted internal-channel orders."""
     if order.get("channel") in {OrderChannel.WEBSITE.value, "B2B"}:
         session = require_customer_session(request)
         if session["customerId"] != str(order["customer_id"]):
             raise HTTPException(status_code=403, detail="Customer session does not match order customer")
+        return
+
+    expected_token = os.environ.get("EYT_ERP_CHANNEL_TOKEN", "")
+    if not expected_token:
+        raise HTTPException(status_code=503, detail="Internal order channel is not configured")
+    if not channel_token or not hmac.compare_digest(channel_token, expected_token):
+        raise HTTPException(status_code=401, detail="Valid internal channel token required")
 
 
 @router.post("", status_code=201)
@@ -175,25 +186,33 @@ def create_order(
 
 
 @router.get("/{order_no}")
-def get_order(order_no: str, request: Request) -> dict[str, Any]:
+def get_order(
+    order_no: str,
+    request: Request,
+    channel_token: str | None = Header(default=None, alias="X-EYT-Channel-Token"),
+) -> dict[str, Any]:
     if order_center is None:
         raise HTTPException(status_code=503, detail="Order Center is not configured")
     result = order_center.orders.get(order_no)
     if result is None:
         raise HTTPException(status_code=404, detail="Order not found")
-    _require_order_customer(request, result)
+    _authorize_order_access(request, result, channel_token)
     return result
 
 
 @router.post("/{order_no}/confirm")
-def confirm_order(order_no: str, request: Request) -> dict[str, Any]:
+def confirm_order(
+    order_no: str,
+    request: Request,
+    channel_token: str | None = Header(default=None, alias="X-EYT-Channel-Token"),
+) -> dict[str, Any]:
     if order_center is None:
         raise HTTPException(status_code=503, detail="Order Center is not configured")
     try:
         order = order_center.orders.get(order_no)
         if order is None:
             raise KeyError(order_no)
-        _require_order_customer(request, order)
+        _authorize_order_access(request, order, channel_token)
         return order_center.confirm(order_no)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Order not found") from exc
