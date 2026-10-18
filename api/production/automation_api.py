@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 import psycopg
@@ -271,6 +271,7 @@ def fail_effect(
 @router.post("/events/{event_id}/ack")
 def acknowledge_event(
     event_id: UUID,
+    outcome: Literal["DELIVERED", "IGNORED"] = "DELIVERED",
     principal: dict = Depends(require_permission("automation.write")),
 ) -> dict[str, Any]:
     del principal
@@ -278,11 +279,11 @@ def acknowledge_event(
         row = conn.execute(
             """
             UPDATE eyt_automation_events
-            SET status='DELIVERED', delivered_at=now(), locked_at=NULL, locked_by=NULL
-            WHERE id=%s AND status IN ('PENDING','PROCESSING')
+            SET status=%s, delivered_at=now(), locked_at=NULL, locked_by=NULL
+            WHERE id=%s AND status='PROCESSING'
             RETURNING id,status,delivered_at
             """,
-            (event_id,),
+            (outcome, event_id),
         ).fetchone()
         conn.commit()
     if not row:
