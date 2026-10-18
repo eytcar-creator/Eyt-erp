@@ -47,17 +47,26 @@ def _db():
 
 def _verify_signature(raw_body: bytes, signature: str | None, channel_token: str | None = None) -> None:
     internal_token = os.environ.get("EYT_ERP_CHANNEL_TOKEN")
+    secret = os.environ.get("CHANNEL_INTAKE_SECRET")
+    if not internal_token and not secret:
+        raise HTTPException(
+            status_code=503,
+            detail="channel intake authentication is not configured",
+        )
+
     if internal_token and channel_token and hmac.compare_digest(channel_token, internal_token):
         return
-    secret = os.environ.get("CHANNEL_INTAKE_SECRET")
-    if not secret:
+
+    if secret:
+        if not signature:
+            raise HTTPException(status_code=401, detail="missing channel signature")
+        supplied = signature.removeprefix("sha256=")
+        expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(supplied, expected):
+            raise HTTPException(status_code=401, detail="invalid channel signature")
         return
-    if not signature:
-        raise HTTPException(status_code=401, detail="missing channel signature")
-    supplied = signature.removeprefix("sha256=")
-    expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(supplied, expected):
-        raise HTTPException(status_code=401, detail="invalid channel signature")
+
+    raise HTTPException(status_code=401, detail="missing or invalid channel token")
 
 
 @router.post("", status_code=201)
