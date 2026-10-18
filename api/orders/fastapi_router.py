@@ -7,7 +7,7 @@ from typing import Any
 
 import psycopg
 from fastapi import APIRouter, Header, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .order_center import CreateOrder, OrderChannel, OrderCenter, OrderLine, PaymentType
 from ..production.customer_portal_api import require_customer_session
@@ -30,6 +30,14 @@ class OrderIn(BaseModel):
     representative_id: str | None = None
     notes: str | None = None
     payment_type: PaymentType = PaymentType.CASH
+
+    @field_validator("items")
+    @classmethod
+    def reject_duplicate_products(cls, items: list[ItemIn]) -> list[ItemIn]:
+        product_ids = [item.product_id for item in items]
+        if len(product_ids) != len(set(product_ids)):
+            raise ValueError("duplicate product lines are not allowed; combine quantities into one line")
+        return items
 
 
 order_center: OrderCenter | None = None
