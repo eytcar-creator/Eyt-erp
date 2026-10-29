@@ -63,6 +63,7 @@ jobs:
 
       - name: Configure pinned SSH host key
         env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
@@ -72,7 +73,7 @@ jobs:
           chmod 600 ~/.ssh/eyt_deploy_key
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
-          ssh-keygen -F "$(printf '%s' "${{ secrets.DEPLOY_HOST }}")" -f ~/.ssh/known_hosts >/dev/null
+          ssh-keygen -F "$DEPLOY_HOST" -f ~/.ssh/known_hosts >/dev/null
 
       - name: Create protected deployment environment file
         env:
