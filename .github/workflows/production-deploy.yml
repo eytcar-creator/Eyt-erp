@@ -7,7 +7,7 @@ on:
 
 concurrency:
   group: eyt-production-deploy
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -21,68 +21,144 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate production compose
-        env:
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'ci-compose-validation-password' }}
-          DATABASE_URL: postgresql://eyt_user:${{ secrets.POSTGRES_PASSWORD }}@db:5432/eyt_erp
-          JWT_SECRET: ${{ secrets.JWT_SECRET || 'ci-compose-validation-jwt' }}
-          BOOTSTRAP_SECRET: ${{ secrets.BOOTSTRAP_SECRET || 'ci-compose-validation-bootstrap' }}
-          RUBIKA_WORKSHOP_WEBHOOK_SECRET: ${{ secrets.RUBIKA_WORKSHOP_WEBHOOK_SECRET || 'ci-compose-validation-rubika' }}
-          N8N_ENCRYPTION_KEY: ${{ secrets.N8N_ENCRYPTION_KEY || 'automation-profile-not-enabled-in-production' }}
-          EYT_ERP_CHANNEL_TOKEN: ${{ secrets.EYT_ERP_CHANNEL_TOKEN || 'automation-profile-not-enabled-in-production' }}
-        run: docker compose -f docker-compose.production.yml config
-
-      - name: Verify deployment configuration
+      - name: Verify required production secrets
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          BOOTSTRAP_SECRET: ${{ secrets.BOOTSTRAP_SECRET }}
           RUBIKA_WORKSHOP_WEBHOOK_SECRET: ${{ secrets.RUBIKA_WORKSHOP_WEBHOOK_SECRET }}
+          N8N_ENCRYPTION_KEY: ${{ secrets.N8N_ENCRYPTION_KEY }}
+          EYT_ERP_CHANNEL_TOKEN: ${{ secrets.EYT_ERP_CHANNEL_TOKEN }}
         run: |
           set -euo pipefail
-          test -n "$DEPLOY_HOST"
-          test -n "$DEPLOY_USER"
-          test -n "$DEPLOY_SSH_KEY"
-          test -n "$DEPLOY_PATH"
-          test -n "$RUBIKA_WORKSHOP_WEBHOOK_SECRET"
-          echo "Production deployment configuration is present."
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS DEPLOY_PATH POSTGRES_PASSWORD DATABASE_URL JWT_SECRET BOOTSTRAP_SECRET RUBIKA_WORKSHOP_WEBHOOK_SECRET N8N_ENCRYPTION_KEY EYT_ERP_CHANNEL_TOKEN; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Required production secret is missing: $name"
+              exit 1
+            fi
+          done
+          [[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9.-]+$ ]] || { echo "::error::DEPLOY_HOST contains unsupported characters"; exit 1; }
+          [[ "$DEPLOY_USER" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "::error::DEPLOY_USER contains unsupported characters"; exit 1; }
+          [[ "$DEPLOY_PATH" =~ ^/[A-Za-z0-9/_-]+$ ]] || { echo "::error::DEPLOY_PATH must be an absolute path containing only letters, digits, slash, underscore, and hyphen"; exit 1; }
+          echo "Required deployment settings are present."
 
-      - name: Configure SSH
+      - name: Validate production Compose configuration
+        env:
+          POSTGRES_DB: eyt_erp
+          POSTGRES_USER: eyt_user
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          BOOTSTRAP_SECRET: ${{ secrets.BOOTSTRAP_SECRET }}
+          RUBIKA_WORKSHOP_WEBHOOK_SECRET: ${{ secrets.RUBIKA_WORKSHOP_WEBHOOK_SECRET }}
+          N8N_ENCRYPTION_KEY: ${{ secrets.N8N_ENCRYPTION_KEY }}
+          EYT_ERP_CHANNEL_TOKEN: ${{ secrets.EYT_ERP_CHANNEL_TOKEN }}
+        run: docker compose -f docker-compose.production.yml config --quiet
+
+      - name: Configure pinned SSH host key
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           install -m 700 -d ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/eyt_deploy_key
           chmod 600 ~/.ssh/eyt_deploy_key
-          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          ssh-keygen -F "$(printf '%s' "${{ secrets.DEPLOY_HOST }}")" -f ~/.ssh/known_hosts >/dev/null
 
-      - name: Sync application
+      - name: Create protected deployment environment file
         env:
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-        run: |
-          set -euo pipefail
-          rsync -az --delete             --exclude '.git/'             --exclude '.env.production'             --exclude '.secrets/'             -e "ssh -i ~/.ssh/eyt_deploy_key"             ./ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
-
-      - name: Deploy and migrate
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          BOOTSTRAP_SECRET: ${{ secrets.BOOTSTRAP_SECRET }}
           RUBIKA_WORKSHOP_WEBHOOK_SECRET: ${{ secrets.RUBIKA_WORKSHOP_WEBHOOK_SECRET }}
+          N8N_ENCRYPTION_KEY: ${{ secrets.N8N_ENCRYPTION_KEY }}
+          EYT_ERP_CHANNEL_TOKEN: ${{ secrets.EYT_ERP_CHANNEL_TOKEN }}
         run: |
           set -euo pipefail
-          printf '%s\n' "$RUBIKA_WORKSHOP_WEBHOOK_SECRET" |             ssh -i ~/.ssh/eyt_deploy_key "$DEPLOY_USER@$DEPLOY_HOST"             "cd '$DEPLOY_PATH' &&              mkdir -p .secrets &&              umask 077 &&              cat > .secrets/rubika_workshop_webhook_secret &&              docker compose -f docker-compose.production.yml up -d --build &&              docker compose -f docker-compose.production.yml run --rm migrate"
+          umask 077
+          file="$RUNNER_TEMP/.env.production"
+          {
+            printf 'POSTGRES_DB=eyt_erp\n'
+            printf 'POSTGRES_USER=eyt_user\n'
+            printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
+            printf 'DATABASE_URL=%s\n' "$DATABASE_URL"
+            printf 'JWT_SECRET=%s\n' "$JWT_SECRET"
+            printf 'BOOTSTRAP_SECRET=%s\n' "$BOOTSTRAP_SECRET"
+            printf 'RUBIKA_WORKSHOP_WEBHOOK_SECRET=%s\n' "$RUBIKA_WORKSHOP_WEBHOOK_SECRET"
+            printf 'N8N_ENCRYPTION_KEY=%s\n' "$N8N_ENCRYPTION_KEY"
+            printf 'EYT_ERP_CHANNEL_TOKEN=%s\n' "$EYT_ERP_CHANNEL_TOKEN"
+            printf 'ACCESS_TOKEN_MINUTES=15\n'
+            printf 'REFRESH_TOKEN_DAYS=30\n'
+            printf 'N8N_HOST=n8n.localhost\n'
+            printf 'N8N_PROTOCOL=http\n'
+            printf 'EYT_ERP_API_BASE_URL=http://api:8000\n'
+            printf 'GENERIC_TIMEZONE=Asia/Tehran\n'
+          } > "$file"
+          test -s "$file"
+          chmod 600 "$file"
 
-      - name: Verify production containers
+      - name: Sync application without deleting server secrets
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/eyt_deploy_key "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH' && chmod 700 '$DEPLOY_PATH'"
+          rsync -az --delete \
+            --exclude '.git/' \
+            --exclude '.env' \
+            --exclude '.env.production' \
+            --exclude '.env.production.tmp' \
+            --exclude '.secrets/' \
+            --exclude 'backups/' \
+            --exclude '*.dump' \
+            -e "ssh -i ~/.ssh/eyt_deploy_key" \
+            ./ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
+
+      - name: Transfer protected environment file
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          scp -i ~/.ssh/eyt_deploy_key "$RUNNER_TEMP/.env.production" "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/.env.production.tmp"
+          ssh -i ~/.ssh/eyt_deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd '$DEPLOY_PATH' && chmod 600 .env.production.tmp && mv .env.production.tmp .env.production"
+
+      - name: Deploy, migrate once, and verify readiness
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/eyt_deploy_key "$DEPLOY_USER@$DEPLOY_HOST"             "cd '$DEPLOY_PATH' && docker compose -f docker-compose.production.yml ps"
+          ssh -i ~/.ssh/eyt_deploy_key "$DEPLOY_USER@$DEPLOY_HOST" "
+            set -euo pipefail
+            cd '$DEPLOY_PATH'
+            docker compose --env-file .env.production -f docker-compose.production.yml config --quiet
+            docker compose --env-file .env.production -f docker-compose.production.yml up -d --build
+            for attempt in \$(seq 1 30); do
+              if curl --fail --silent http://127.0.0.1:8000/ready >/dev/null; then
+                echo 'ERP readiness passed.'
+                docker compose --env-file .env.production -f docker-compose.production.yml ps
+                exit 0
+              fi
+              sleep 5
+            done
+            echo 'ERP readiness failed. Recent service logs follow.'
+            docker compose --env-file .env.production -f docker-compose.production.yml ps
+            docker compose --env-file .env.production -f docker-compose.production.yml logs --tail=100 api db migrate catalog
+            exit 1
+          "
