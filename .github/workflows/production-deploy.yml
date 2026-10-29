@@ -29,7 +29,6 @@ jobs:
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           BOOTSTRAP_SECRET: ${{ secrets.BOOTSTRAP_SECRET }}
           RUBIKA_WORKSHOP_WEBHOOK_SECRET: ${{ secrets.RUBIKA_WORKSHOP_WEBHOOK_SECRET }}
@@ -37,7 +36,7 @@ jobs:
           EYT_ERP_CHANNEL_TOKEN: ${{ secrets.EYT_ERP_CHANNEL_TOKEN }}
         run: |
           set -euo pipefail
-          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS DEPLOY_PATH POSTGRES_PASSWORD DATABASE_URL JWT_SECRET BOOTSTRAP_SECRET RUBIKA_WORKSHOP_WEBHOOK_SECRET N8N_ENCRYPTION_KEY EYT_ERP_CHANNEL_TOKEN; do
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS DEPLOY_PATH POSTGRES_PASSWORD JWT_SECRET BOOTSTRAP_SECRET RUBIKA_WORKSHOP_WEBHOOK_SECRET N8N_ENCRYPTION_KEY EYT_ERP_CHANNEL_TOKEN; do
             if [ -z "${!name:-}" ]; then
               echo "::error::Required production secret is missing: $name"
               exit 1
@@ -46,6 +45,12 @@ jobs:
           [[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9.-]+$ ]] || { echo "::error::DEPLOY_HOST contains unsupported characters"; exit 1; }
           [[ "$DEPLOY_USER" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "::error::DEPLOY_USER contains unsupported characters"; exit 1; }
           [[ "$DEPLOY_PATH" =~ ^/[A-Za-z0-9/_-]+$ ]] || { echo "::error::DEPLOY_PATH must be an absolute path containing only letters, digits, slash, underscore, and hyphen"; exit 1; }
+          for name in POSTGRES_PASSWORD JWT_SECRET BOOTSTRAP_SECRET RUBIKA_WORKSHOP_WEBHOOK_SECRET N8N_ENCRYPTION_KEY EYT_ERP_CHANNEL_TOKEN; do
+            if [[ ! "${!name}" =~ ^[A-Za-z0-9_-]{32,}$ ]]; then
+              echo "::error::Secret $name must be at least 32 characters and use only letters, digits, underscore, or hyphen."
+              exit 1
+            fi
+          done
           echo "Required deployment settings are present."
 
       - name: Validate production Compose configuration
@@ -53,7 +58,7 @@ jobs:
           POSTGRES_DB: eyt_erp
           POSTGRES_USER: eyt_user
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: postgresql://eyt_user:${{ secrets.POSTGRES_PASSWORD }}@db:5432/eyt_erp
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           BOOTSTRAP_SECRET: ${{ secrets.BOOTSTRAP_SECRET }}
           RUBIKA_WORKSHOP_WEBHOOK_SECRET: ${{ secrets.RUBIKA_WORKSHOP_WEBHOOK_SECRET }}
@@ -92,7 +97,7 @@ jobs:
             printf 'POSTGRES_DB=eyt_erp\n'
             printf 'POSTGRES_USER=eyt_user\n'
             printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
-            printf 'DATABASE_URL=%s\n' "$DATABASE_URL"
+            printf 'DATABASE_URL=postgresql://eyt_user:%s@db:5432/eyt_erp\n' "$POSTGRES_PASSWORD"
             printf 'JWT_SECRET=%s\n' "$JWT_SECRET"
             printf 'BOOTSTRAP_SECRET=%s\n' "$BOOTSTRAP_SECRET"
             printf 'RUBIKA_WORKSHOP_WEBHOOK_SECRET=%s\n' "$RUBIKA_WORKSHOP_WEBHOOK_SECRET"
