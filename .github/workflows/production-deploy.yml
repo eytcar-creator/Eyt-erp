@@ -1,9 +1,8 @@
 name: E.Y.T Production Deploy
 
 on:
+  # Production deployment is intentionally manual until host credentials and DNS/TLS are verified.
   workflow_dispatch:
-  push:
-    branches: [main]
 
 concurrency:
   group: eyt-production-deploy
