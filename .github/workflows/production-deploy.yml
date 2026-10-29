@@ -83,7 +83,6 @@ jobs:
       - name: Create protected deployment environment file
         env:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           BOOTSTRAP_SECRET: ${{ secrets.BOOTSTRAP_SECRET }}
           RUBIKA_WORKSHOP_WEBHOOK_SECRET: ${{ secrets.RUBIKA_WORKSHOP_WEBHOOK_SECRET }}
